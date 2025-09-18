@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
@@ -14,7 +15,52 @@ def new_persistent_browser_context(pw=None, headless=True):
     STORAGE.parent.mkdir(parents=True, exist_ok=True)
 
     if pw is None:
-        pw = sync_playwright().start()
+        # Handle potential asyncio conflict more robustly
+        try:
+            pw = sync_playwright().start()
+        except RuntimeError as e:
+            if "asyncio" in str(e).lower():
+                print(f"[DEBUG] Asyncio conflict detected: {e}")
+                print("[DEBUG] Attempting to resolve by clearing event loop policy...")
+
+                # Try multiple approaches to resolve asyncio conflict
+                try:
+                    # Method 1: Clear asyncio event loop policy
+                    asyncio.set_event_loop_policy(None)
+                    asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+                    pw = sync_playwright().start()
+                    print("[DEBUG] Successfully resolved via event loop policy reset")
+                except Exception as policy_e:
+                    print(f"[DEBUG] Event loop policy reset failed: {policy_e}")
+
+                    # Method 2: Try with new thread approach
+                    print("[DEBUG] Attempting to resolve by running in new thread...")
+                    import threading
+                    import queue
+
+                    result_queue = queue.Queue()
+                    def init_playwright():
+                        try:
+                            # Clear any thread-local asyncio state
+                            try:
+                                asyncio.set_event_loop(None)
+                            except:
+                                pass
+                            result_queue.put(("success", sync_playwright().start()))
+                        except Exception as thread_e:
+                            result_queue.put(("error", thread_e))
+
+                    thread = threading.Thread(target=init_playwright)
+                    thread.start()
+                    thread.join()
+
+                    status, result = result_queue.get()
+                    if status == "error":
+                        raise result
+                    pw = result
+                    print("[DEBUG] Successfully initialized Playwright in separate thread")
+            else:
+                raise
 
     browser = pw.chromium.launch(
         headless=headless,

@@ -169,10 +169,17 @@ def _run_sf_tim_king_pipeline():
         return False
 
 def _run_sf_partner_calls():
-    """Run SF Partner Calls extractor directly."""
+    """Run SF Partner Calls extractor in subprocess to avoid asyncio conflicts."""
     try:
-        from extractors.salesforce.partner_calls import export_partner_calls
-        return export_partner_calls()
+        # This extractor has persistent asyncio conflicts, so run it in subprocess like corp portal
+        print("[DEBUG] Running SF Partner Calls in subprocess to avoid asyncio conflicts...")
+        success, info = run_extractor_subprocess("extractors.salesforce.partner_calls", timeout=300)
+        if success:
+            print("[DEBUG] SF Partner Calls subprocess completed successfully")
+            return True
+        else:
+            print(f"[ERROR] SF Partner Calls subprocess failed: {info.get('error', 'Unknown error')}")
+            return False
     except Exception as e:
         print(f"[ERROR] SF Partner Calls failed: {e}")
         return False
