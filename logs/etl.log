@@ -1,0 +1,165 @@
+[2025-09-17 22:32:35] [INFO] [etl.scheduler] Registered ETL job: Ultimate DMS Campaign Data (ultimate_dms)
+[2025-09-17 22:32:35] [INFO] [etl.scheduler] Registered ETL job: Budget Waterfall Client Data (budget_waterfall)
+[2025-09-17 22:32:35] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Pipeline (sf_partner_pipeline)
+[2025-09-17 22:32:35] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Calls (sf_partner_calls)
+[2025-09-17 22:32:35] [INFO] [etl.scheduler] Initialized 4 default ETL jobs
+[2025-09-17 22:32:35] [INFO] [etl.scheduler] ETL Scheduler: Starting pipeline execution for 4 jobs
+[2025-09-17 22:32:35] [INFO] [etl.scheduler] Starting ETL Pipeline Execution...
+[2025-09-17 22:32:35] [ERROR] [etl.scheduler] No jobs ready to execute. Remaining: {'sf_partner_pipeline', 'sf_partner_calls'}
+[2025-09-17 22:32:35] [INFO] [etl.scheduler] Completed ETL Pipeline Execution in 0.00 seconds
+[2025-09-17 22:32:35] [ERROR] [etl.scheduler] ETL Scheduler: Pipeline completed: 0 successful, 2 failed
+[2025-09-18 10:38:28] [INFO] [etl.scheduler] Registered ETL job: Ultimate DMS Campaign Data (ultimate_dms)
+[2025-09-18 10:38:28] [INFO] [etl.scheduler] Registered ETL job: Budget Waterfall Client Data (budget_waterfall)
+[2025-09-18 10:38:28] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Pipeline (sf_partner_pipeline)
+[2025-09-18 10:38:28] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Calls (sf_partner_calls)
+[2025-09-18 10:38:28] [INFO] [etl.scheduler] Initialized 4 default ETL jobs
+[2025-09-18 10:39:14] [INFO] [etl.scheduler] Registered ETL job: Ultimate DMS Campaign Data (ultimate_dms)
+[2025-09-18 10:39:14] [INFO] [etl.scheduler] Registered ETL job: Budget Waterfall Client Data (budget_waterfall)
+[2025-09-18 10:39:14] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Pipeline (sf_partner_pipeline)
+[2025-09-18 10:39:14] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Calls (sf_partner_calls)
+[2025-09-18 10:39:14] [INFO] [etl.scheduler] Initialized 4 default ETL jobs
+[2025-09-18 10:39:26] [INFO] [etl.scheduler] Registered ETL job: Ultimate DMS Campaign Data (ultimate_dms)
+[2025-09-18 10:39:26] [INFO] [etl.scheduler] Registered ETL job: Budget Waterfall Client Data (budget_waterfall)
+[2025-09-18 10:39:26] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Pipeline (sf_partner_pipeline)
+[2025-09-18 10:39:26] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Calls (sf_partner_calls)
+[2025-09-18 10:39:26] [INFO] [etl.scheduler] Initialized 4 default ETL jobs
+[2025-09-18 10:39:26] [INFO] [etl.extractor.unified] Unified Extractor: Starting full data extraction pipeline
+[2025-09-18 10:39:26] [INFO] [etl.extractor.unified] Unified Extractor: Extracting ultimate_dms
+[2025-09-18 10:39:26] [ERROR] [etl.extractor.unified] Unified Extractor: Exception during ultimate_dms extraction: Original extractor function not available for ultimate_dms
+[2025-09-18 10:39:26] [INFO] [etl.extractor.unified] Unified Extractor: Extracting budget_waterfall
+[2025-09-18 10:39:26] [ERROR] [etl.extractor.unified] Unified Extractor: Exception during budget_waterfall extraction: Original extractor function not available for budget_waterfall
+[2025-09-18 10:39:26] [INFO] [etl.extractor.unified] Unified Extractor: Extracting sf_partner_pipeline
+[2025-09-18 10:39:26] [ERROR] [etl.extractor.unified] Unified Extractor: Exception during sf_partner_pipeline extraction: Original extractor function not available for sf_partner_pipeline
+[2025-09-18 10:39:26] [INFO] [etl.extractor.unified] Unified Extractor: Extracting sf_partner_calls
+[2025-09-18 10:39:26] [ERROR] [etl.extractor.unified] Unified Extractor: Exception during sf_partner_calls extraction: Original extractor function not available for sf_partner_calls
+[2025-09-18 10:39:26] [ERROR] [etl.extractor.unified] Unified Extractor: Extraction pipeline completed: 0 successful, 4 failed
+[2025-09-18 10:39:37] [INFO] [etl.scheduler] Registered ETL job: Ultimate DMS Campaign Data (ultimate_dms)
+[2025-09-18 10:39:37] [INFO] [etl.scheduler] Registered ETL job: Budget Waterfall Client Data (budget_waterfall)
+[2025-09-18 10:39:37] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Pipeline (sf_partner_pipeline)
+[2025-09-18 10:39:37] [INFO] [etl.scheduler] Registered ETL job: Salesforce Partner Calls (sf_partner_calls)
+[2025-09-18 10:39:37] [INFO] [etl.scheduler] Initialized 4 default ETL jobs
+[2025-09-18 10:39:37] [INFO] [etl.scheduler] ETL Scheduler: Starting pipeline execution for 1 jobs
+[2025-09-18 10:39:37] [INFO] [etl.scheduler] Starting ETL Pipeline Execution...
+[2025-09-18 10:39:37] [INFO] [etl.scheduler] Completed ETL Pipeline Execution in 0.00 seconds
+[2025-09-18 10:39:37] [ERROR] [etl.scheduler] ETL Scheduler: Pipeline completed: 0 successful, 1 failed
+[2025-09-18 11:10:19] NOTIFY: INFO: Multi-Report Extraction Starting - Starting all 10 report extractors at 2025-09-18 11:10:19.254961
+[2025-09-18 11:10:19] SETUP: Running pre-flight checks...
+[2025-09-18 11:10:19] SETUP: Ensured 14 directories exist
+[2025-09-18 11:10:19] PIPELINE: === Starting Corporate Portal Extractors ===
+[2025-09-18 11:10:19] CORP_PORTAL: === Starting Ultimate DMS ===
+[2025-09-18 11:10:22] CORP_PORTAL: Ultimate DMS FAILED: Unknown error
+[2025-09-18 11:10:22] NOTIFY: CRIT: Ultimate DMS Failed - Corp Portal extractor failed
+[2025-09-18 11:10:22] CORP_PORTAL: === Starting Budget Waterfall Client ===
+[2025-09-18 11:10:35] CORP_PORTAL: Budget Waterfall Client FAILED: Unknown error
+[2025-09-18 11:10:35] NOTIFY: CRIT: Budget Waterfall Client Failed - Corp Portal extractor failed
+[2025-09-18 11:10:35] CORP_PORTAL: === Starting Spend Revenue Performance ===
+[2025-09-18 11:10:35] CORP_PORTAL: Spend Revenue Performance completed successfully
+[2025-09-18 11:10:35] CORP_PORTAL: === Starting DFP-RIJ ===
+[2025-09-18 11:10:35] CORP_PORTAL: DFP-RIJ completed successfully
+[2025-09-18 11:10:35] CORP_PORTAL: === Starting Agreed CPL Performance ===
+[2025-09-18 11:10:35] CORP_PORTAL: Agreed CPL Performance completed successfully
+[2025-09-18 11:10:35] CORP_PORTAL: === Starting BSC Standards ===
+[2025-09-18 11:10:35] CORP_PORTAL: BSC Standards completed successfully
+[2025-09-18 11:10:35] CORP_PORTAL: === Starting Budget Waterfall Channel ===
+[2025-09-18 11:10:35] CORP_PORTAL: Budget Waterfall Channel completed successfully
+[2025-09-18 11:10:35] PIPELINE: === Starting Salesforce Extractors ===
+[2025-09-18 11:10:36] SALESFORCE: === Starting SF Partner Pipeline ===
+[2025-09-18 11:10:39] SALESFORCE: SF Partner Pipeline FAILED: Unknown error
+[2025-09-18 11:10:39] NOTIFY: CRIT: SF Partner Pipeline Failed - Salesforce extractor failed
+[2025-09-18 11:10:39] SALESFORCE: === Starting SF Tim King Pipeline ===
+[2025-09-18 11:10:39] SALESFORCE: SF Tim King Pipeline completed successfully
+[2025-09-18 11:10:39] SALESFORCE: === Starting SF Partner Calls ===
+[2025-09-18 11:10:40] SALESFORCE: SF Partner Calls completed successfully
+[2025-09-18 11:10:40] NOTIFY: CRIT: Extraction Pipeline Failed - Unexpected error: 'charmap' codec can't encode character '\u2717' in position 2: character maps to <undefined>
+[2025-09-18 11:18:34] NOTIFY: INFO: Multi-Report Extraction Starting - Starting all 10 report extractors at 2025-09-18 11:18:34.917103
+[2025-09-18 11:18:34] SETUP: Running pre-flight checks...
+[2025-09-18 11:18:34] SETUP: Ensured 14 directories exist
+[2025-09-18 11:18:34] PIPELINE: === Starting Corporate Portal Extractors ===
+[2025-09-18 11:18:34] CORP_PORTAL: === Starting Ultimate DMS ===
+[2025-09-18 11:18:37] CORP_PORTAL: Ultimate DMS FAILED: Unknown error
+[2025-09-18 11:18:37] NOTIFY: CRIT: Ultimate DMS Failed - Corp Portal extractor failed
+[2025-09-18 11:18:37] CORP_PORTAL: === Starting Budget Waterfall Client ===
+[2025-09-18 11:18:51] CORP_PORTAL: Budget Waterfall Client FAILED: Unknown error
+[2025-09-18 11:18:51] NOTIFY: CRIT: Budget Waterfall Client Failed - Corp Portal extractor failed
+[2025-09-18 11:18:51] CORP_PORTAL: === Starting Spend Revenue Performance ===
+[2025-09-18 11:18:51] CORP_PORTAL: Spend Revenue Performance completed successfully
+[2025-09-18 11:18:51] CORP_PORTAL: === Starting DFP-RIJ ===
+[2025-09-18 11:18:51] CORP_PORTAL: DFP-RIJ completed successfully
+[2025-09-18 11:18:51] CORP_PORTAL: === Starting Agreed CPL Performance ===
+[2025-09-18 11:18:52] CORP_PORTAL: Agreed CPL Performance completed successfully
+[2025-09-18 11:18:52] CORP_PORTAL: === Starting BSC Standards ===
+[2025-09-18 11:18:52] CORP_PORTAL: BSC Standards completed successfully
+[2025-09-18 11:18:52] CORP_PORTAL: === Starting Budget Waterfall Channel ===
+[2025-09-18 11:18:52] CORP_PORTAL: Budget Waterfall Channel completed successfully
+[2025-09-18 11:18:52] PIPELINE: === Starting Salesforce Extractors ===
+[2025-09-18 11:18:52] SALESFORCE: === Starting SF Partner Pipeline ===
+[2025-09-18 11:19:00] SALESFORCE: SF Partner Pipeline FAILED: Unknown error
+[2025-09-18 11:19:00] NOTIFY: CRIT: SF Partner Pipeline Failed - Salesforce extractor failed
+[2025-09-18 11:19:00] SALESFORCE: === Starting SF Tim King Pipeline ===
+[2025-09-18 11:19:00] SALESFORCE: SF Tim King Pipeline completed successfully
+[2025-09-18 11:19:00] SALESFORCE: === Starting SF Partner Calls ===
+[2025-09-18 11:19:00] SALESFORCE: SF Partner Calls completed successfully
+[2025-09-18 11:19:00] NOTIFY: WARN: Partial Extraction Success - 7/10 extractors succeeded
+[2025-09-18 11:37:33] NOTIFY: INFO: Multi-Report Extraction Starting - Starting all 10 report extractors at 2025-09-18 11:37:33.956362
+[2025-09-18 11:37:33] SETUP: Running pre-flight checks...
+[2025-09-18 11:37:33] SETUP: Ensured 14 directories exist
+[2025-09-18 11:37:33] PIPELINE: === Starting Corporate Portal Extractors ===
+[2025-09-18 11:37:33] CORP_PORTAL: === Starting Ultimate DMS ===
+[2025-09-18 11:37:48] CORP_PORTAL: Ultimate DMS completed successfully
+[2025-09-18 11:37:48] CORP_PORTAL: === Starting Budget Waterfall Client ===
+[2025-09-18 11:38:02] CORP_PORTAL: Budget Waterfall Client FAILED: Unknown error
+[2025-09-18 11:38:02] NOTIFY: CRIT: Budget Waterfall Client Failed - Corp Portal extractor failed
+[2025-09-18 11:38:02] CORP_PORTAL: === Starting Spend Revenue Performance ===
+[2025-09-18 11:38:02] CORP_PORTAL: Spend Revenue Performance completed successfully
+[2025-09-18 11:38:02] CORP_PORTAL: === Starting DFP-RIJ ===
+[2025-09-18 11:38:02] CORP_PORTAL: DFP-RIJ completed successfully
+[2025-09-18 11:38:02] CORP_PORTAL: === Starting Agreed CPL Performance ===
+[2025-09-18 11:38:02] CORP_PORTAL: Agreed CPL Performance completed successfully
+[2025-09-18 11:38:02] CORP_PORTAL: === Starting BSC Standards ===
+[2025-09-18 11:38:02] CORP_PORTAL: BSC Standards completed successfully
+[2025-09-18 11:38:02] CORP_PORTAL: === Starting Budget Waterfall Channel ===
+[2025-09-18 11:38:02] CORP_PORTAL: Budget Waterfall Channel completed successfully
+[2025-09-18 11:38:02] PIPELINE: === Starting Salesforce Extractors ===
+[2025-09-18 11:38:02] SALESFORCE: === Starting SF Partner Pipeline ===
+[2025-09-18 11:40:37] NOTIFY: WARN: Extraction Interrupted - User interrupted the extraction process
+[2025-09-18 11:42:32] NOTIFY: INFO: Multi-Report Extraction Starting - Starting all 10 report extractors at 2025-09-18 11:42:32.683921
+[2025-09-18 11:42:32] SETUP: Running pre-flight checks...
+[2025-09-18 11:42:32] SETUP: Ensured 14 directories exist
+[2025-09-18 11:42:32] PIPELINE: === Starting Corporate Portal Extractors ===
+[2025-09-18 11:42:32] CORP_PORTAL: === Starting Ultimate DMS ===
+[2025-09-18 11:42:50] CORP_PORTAL: Ultimate DMS FAILED: Unknown error
+[2025-09-18 11:42:50] NOTIFY: CRIT: Ultimate DMS Failed - Corp Portal extractor failed
+[2025-09-18 11:42:50] CORP_PORTAL: === Starting Budget Waterfall Client ===
+[2025-09-18 11:43:02] CORP_PORTAL: Budget Waterfall Client FAILED: Unknown error
+[2025-09-18 11:43:02] NOTIFY: CRIT: Budget Waterfall Client Failed - Corp Portal extractor failed
+[2025-09-18 11:43:02] CORP_PORTAL: === Starting Spend Revenue Performance ===
+[2025-09-18 11:43:09] SALESFORCE: === Starting SF Partner Pipeline ===
+[2025-09-18 11:45:45] NOTIFY: INFO: Multi-Report Extraction Starting - Starting all 10 report extractors at 2025-09-18 11:45:45.067394
+[2025-09-18 11:45:45] SETUP: Running pre-flight checks...
+[2025-09-18 11:45:45] SETUP: Ensured 14 directories exist
+[2025-09-18 11:45:45] PIPELINE: === Starting Corporate Portal Extractors ===
+[2025-09-18 11:45:45] CORP_PORTAL: === Starting Ultimate DMS ===
+[2025-09-18 11:46:02] CORP_PORTAL: Ultimate DMS FAILED: Unknown error
+[2025-09-18 11:46:02] NOTIFY: CRIT: Ultimate DMS Failed - Corp Portal extractor failed
+[2025-09-18 11:46:02] CORP_PORTAL: === Starting Budget Waterfall Client ===
+[2025-09-18 11:46:15] CORP_PORTAL: Budget Waterfall Client FAILED: Unknown error
+[2025-09-18 11:46:15] NOTIFY: CRIT: Budget Waterfall Client Failed - Corp Portal extractor failed
+[2025-09-18 11:46:15] CORP_PORTAL: === Starting Spend Revenue Performance ===
+[2025-09-18 11:46:15] CORP_PORTAL: Spend Revenue Performance completed successfully
+[2025-09-18 11:46:15] CORP_PORTAL: === Starting DFP-RIJ ===
+[2025-09-18 11:46:15] CORP_PORTAL: DFP-RIJ completed successfully
+[2025-09-18 11:46:15] CORP_PORTAL: === Starting Agreed CPL Performance ===
+[2025-09-18 11:46:15] CORP_PORTAL: Agreed CPL Performance completed successfully
+[2025-09-18 11:46:15] CORP_PORTAL: === Starting BSC Standards ===
+[2025-09-18 11:46:16] CORP_PORTAL: BSC Standards completed successfully
+[2025-09-18 11:46:16] CORP_PORTAL: === Starting Budget Waterfall Channel ===
+[2025-09-18 11:46:16] CORP_PORTAL: Budget Waterfall Channel completed successfully
+[2025-09-18 11:46:16] PIPELINE: === Starting Salesforce Extractors ===
+[2025-09-18 11:46:16] SALESFORCE: === Starting SF Partner Pipeline ===
+[2025-09-18 11:48:12] SALESFORCE: SF Partner Pipeline FAILED
+[2025-09-18 11:48:12] NOTIFY: CRIT: SF Partner Pipeline Failed - Salesforce extractor failed
+[2025-09-18 11:48:12] SALESFORCE: === Starting SF Tim King Pipeline ===
+[2025-09-18 11:48:12] SALESFORCE: SF Tim King Pipeline completed successfully
+[2025-09-18 11:48:12] SALESFORCE: === Starting SF Partner Calls ===
+[2025-09-18 11:48:12] SALESFORCE: SF Partner Calls completed successfully
+[2025-09-18 11:48:12] NOTIFY: WARN: Partial Extraction Success - 7/10 extractors succeeded

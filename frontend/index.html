@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Unified Northlight Platform</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Montserrat:wght@800&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles.css?v=unified-v1">
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-content">
+      <div class="brand-section">
+        <div class="brand-name">
+          <span class="company-name">UNIFIED NORTHLIGHT</span>
+          <span class="beta-label">v1.0</span>
+        </div>
+        <div class="tagline">Integrated data pipeline and benchmarking platform</div>
+      </div>
+      <div class="right-section">
+        <div class="nav-menu">
+          <a href="#" id="benchmarksTab" class="nav-item active">Benchmarks</a>
+          <a href="#" id="etlTab" class="nav-item">ETL Management</a>
+          <a href="#" id="analyticsTab" class="nav-item">Analytics</a>
+          <a href="#" id="reportsTab" class="nav-item">Reports</a>
+        </div>
+        <div class="auth-section">
+          <button id="loginBtn" class="btn-auth">Login</button>
+          <div id="userInfo" class="user-info" style="display:none;">
+            <span id="username"></span>
+            <button id="logoutBtn" class="btn-logout">Logout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="tool-section">
+    <!-- BENCHMARKS TAB -->
+    <div id="benchmarksSection" class="tab-content active">
+      <h1 class="tool-title">Benchmark Your Campaign</h1>
+
+      <div class="form-container" id="formContainer">
+        <!-- Row 1: Category / Subcategory -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="category" class="form-label">Category</label>
+            <select id="category" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label for="subcategory" class="form-label">Subcategory</label>
+            <select id="subcategory" class="form-select"></select>
+          </div>
+        </div>
+
+        <!-- Row 2: 2x2 inputs -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="goal_cpl" class="form-label">Goal CPL</label>
+            <input id="goal_cpl" type="number" step="0.01" class="form-input"/>
+          </div>
+          <div class="form-group">
+            <label for="budget" class="form-label">Budget</label>
+            <input id="budget" type="number" step="0.01" class="form-input"/>
+          </div>
+          <div class="form-group">
+            <label for="clicks" class="form-label">Clicks</label>
+            <input id="clicks" type="number" step="1" class="form-input"/>
+          </div>
+          <div class="form-group">
+            <label for="leads" class="form-label">Leads</label>
+            <input id="leads" type="number" step="1" class="form-input"/>
+          </div>
+        </div>
+
+        <div class="button-container">
+          <button id="runBtn" class="btn-primary" type="button">Run Benchmark</button>
+          <button id="resetBtn" class="btn-secondary" type="button">Reset Inputs</button>
+        </div>
+      </div>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <!-- RESULTS -->
+      <section id="results" role="region" aria-live="polite" aria-busy="false" aria-labelledby="resultsHeading" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <h3 id="resultsHeading" style="margin:0;">Results</h3>
+          <div style="display:flex;gap:8px;">
+            <button id="copySummaryBtn" class="btn-small" type="button" disabled>Copy Summary</button>
+          </div>
+        </div>
+
+        <!-- Goal CPL analysis -->
+        <div id="primaryStatusBlock" class="card"></div>
+
+        <!-- Metric verdicts -->
+        <div id="cpl-verdict-container" class="card"></div>
+        <div id="cpc-verdict-container" class="card"></div>
+        <div id="cr-verdict-container" class="card"></div>
+
+        <!-- Diagnosis + Scenario Builder -->
+        <div id="diagnosisCard" class="card"></div>
+        <div id="scenarioBuilder" class="card" style="display:none;margin-top:24px;"></div>
+      </section>
+    </div>
+
+    <!-- ETL MANAGEMENT TAB -->
+    <div id="etlSection" class="tab-content" style="display:none;">
+      <h1 class="tool-title">ETL Pipeline Management</h1>
+
+      <!-- Pipeline Status -->
+      <div class="card">
+        <h3>Pipeline Status</h3>
+        <div id="pipelineStatus" class="status-grid"></div>
+      </div>
+
+      <!-- Job Management -->
+      <div class="card">
+        <h3>Job Management</h3>
+        <div class="job-controls">
+          <button id="refreshJobsBtn" class="btn-secondary">Refresh</button>
+          <button id="runFullPipelineBtn" class="btn-primary">Run Full Pipeline</button>
+        </div>
+        <div id="jobsList" class="jobs-list"></div>
+      </div>
+
+      <!-- Health Metrics -->
+      <div class="card">
+        <h3>System Health</h3>
+        <div id="healthMetrics" class="health-grid"></div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS TAB -->
+    <div id="analyticsSection" class="tab-content" style="display:none;">
+      <h1 class="tool-title">Analytics Dashboard</h1>
+
+      <div class="analytics-grid">
+        <div class="card">
+          <h3>Campaign Performance</h3>
+          <div id="campaignMetrics"></div>
+        </div>
+
+        <div class="card">
+          <h3>Partner Pipeline</h3>
+          <div id="partnerMetrics"></div>
+        </div>
+
+        <div class="card">
+          <h3>Executive Dashboard</h3>
+          <div id="executiveMetrics"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPORTS TAB -->
+    <div id="reportsSection" class="tab-content" style="display:none;">
+      <h1 class="tool-title">Report Generation</h1>
+
+      <div class="card">
+        <h3>Available Reports</h3>
+        <div class="report-templates" id="reportTemplates"></div>
+      </div>
+
+      <div class="card">
+        <h3>Generate Reports</h3>
+        <div class="report-controls">
+          <button id="dataQualityReportBtn" class="btn-primary">Data Quality Report</button>
+          <button id="campaignReportBtn" class="btn-primary">Campaign Performance Report</button>
+          <button id="partnerReportBtn" class="btn-primary">Partner Pipeline Report</button>
+        </div>
+        <div id="reportResults"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- LOGIN MODAL -->
+  <div id="loginModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h3>Login to Unified Northlight</h3>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="loginUsername">Username</label>
+          <input type="text" id="loginUsername" required>
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" required>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" id="cancelLoginBtn" class="btn-secondary">Cancel</button>
+          <button type="submit" class="btn-primary">Login</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#" id="methodologyLink">Methodology</a>
+        <a href="#" id="dataFreshnessLink">Data Freshness</a>
+        <a href="#" id="termsLink">Terms</a>
+      </div>
+      <div class="footer-right muted">© <span id="footerYear"></span> Unified Northlight</div>
+    </div>
+  </footer>
+
+  <script src="unified-script.js?v=unified-v1"></script>
+</body>
+</html>

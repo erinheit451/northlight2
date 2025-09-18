@@ -1,0 +1,31 @@
+[
+  {
+    "campaign_id": "4991357",
+    "maid": "TEST123",
+    "advertiser_name": "Test Advertiser",
+    "partner_name": "Test Partner",
+    "bid_name": "Test Bid",
+    "campaign_name": "Test Campaign",
+    "am": "Test AM",
+    "optimizer": "Test Optimizer",
+    "gm": "Test GM",
+    "business_category": "Test Category",
+    "campaign_budget": 10000.0,
+    "amount_spent": 5000.0,
+    "io_cycle": 2,
+    "avg_cycle_length": 30.0,
+    "days_elapsed": 15,
+    "days_active": 10,
+    "utilization": 50.0,
+    "running_cid_leads": 25,
+    "running_cid_cpl": 200.0,
+    "cpl_goal": 100.0,
+    "bsc_cpl_avg": 150.0,
+    "effective_cpl_goal": 100.0,
+    "expected_leads_monthly": 100,
+    "expected_leads_to_date": 50,
+    "expected_leads_to_date_spend": 5000.0,
+    "advertiser_product_count": 1,
+    "is_safe": false
+  }
+]

@@ -1,0 +1,66 @@
+[2025-09-17 20:18:22] [ERROR] [api.v1.book] Error in get_summary: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedTableError'>: relation "book.campaigns" does not exist
+[SQL: SELECT book.campaigns.id, book.campaigns.campaign_id, book.campaigns.maid, book.campaigns.advertiser_name, book.campaigns.partner_name, book.campaigns.bid_name, book.campaigns.campaign_name, book.campaigns.am, book.campaigns.optimizer, book.campaigns.gm, book.campaigns.business_category, book.campaigns.campaign_budget, book.campaigns.amount_spent, book.campaigns.io_cycle, book.campaigns.avg_cycle_length, book.campaigns.days_elapsed, book.campaigns.days_active, book.campaigns.utilization, book.campaigns.running_cid_leads, book.campaigns.running_cid_cpl, book.campaigns.cpl_goal, book.campaigns.bsc_cpl_avg, book.campaigns.effective_cpl_goal, book.campaigns.expected_leads_monthly, book.campaigns.expected_leads_to_date, book.campaigns.expected_leads_to_date_spend, book.campaigns.true_days_running, book.campaigns.true_months_running, book.campaigns.cycle_label, book.campaigns.age_risk, book.campaigns.lead_risk, book.campaigns.cpl_risk, book.campaigns.util_risk, book.campaigns.structure_risk, book.campaigns.total_risk_score, book.campaigns.value_score, book.campaigns.final_priority_score, book.campaigns.priority_index, book.campaigns.priority_tier, book.campaigns.primary_issue, book.campaigns.churn_prob_90d, book.campaigns.churn_risk_band, book.campaigns.revenue_at_risk, book.campaigns.risk_drivers_json, book.campaigns.flare_score, book.campaigns.flare_band, book.campaigns.flare_breakdown_json, book.campaigns.flare_score_raw, book.campaigns.headline_diagnosis, book.campaigns.headline_severity, book.campaigns.diagnosis_pills, book.campaigns.campaign_count, book.campaigns.true_product_count, book.campaigns.is_safe, book.campaigns.goal_advice_json, book.campaigns.status, book.campaigns.created_at, book.campaigns.updated_at 
+FROM book.campaigns]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+[2025-09-17 20:38:52] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 22:11:56] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 22:53:31] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:07:25] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:22:26] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:31:55] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:37:35] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:39:20] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:39:29] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:40:22] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:43:00] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-17 23:43:52] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 00:00:01] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 00:06:31] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 00:09:34] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 00:10:49] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 00:13:34] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 06:57:32] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 07:37:52] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 07:38:01] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 07:38:14] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 08:12:04] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 08:17:09] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 08:17:24] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 08:39:14] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 09:08:31] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 09:26:56] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 09:44:04] [ERROR] [api.v1.book] Error in get_metadata: Multiple rows were found when one or none was required
+[2025-09-18 11:44:38] [ERROR] [api.v1.trajectory] Error getting trajectory for campaign 4983793: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.DataError'>: invalid input for query argument $1: '4983793' ('str' object cannot be interpreted as an integer)
+[SQL: 
+            SELECT report_month, cost_per_lead, leads, spend
+            FROM heartbeat_etl.spend_revenue_performance_current
+            WHERE campaign_id = $1
+              AND cost_per_lead IS NOT NULL
+            ORDER BY report_month DESC
+            LIMIT 12
+        ]
+[parameters: ('4983793',)]
+(Background on this error at: https://sqlalche.me/e/20/dbapi)
+[2025-09-18 11:45:09] [ERROR] [api.v1.trajectory] Error getting trajectory for campaign 4983793: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.DataError'>: invalid input for query argument $1: '4983793' ('str' object cannot be interpreted as an integer)
+[SQL: 
+            SELECT report_month, cost_per_lead, leads, spend
+            FROM heartbeat_etl.spend_revenue_performance_current
+            WHERE campaign_id = $1
+              AND cost_per_lead IS NOT NULL
+            ORDER BY report_month DESC
+            LIMIT 12
+        ]
+[parameters: ('4983793',)]
+(Background on this error at: https://sqlalche.me/e/20/dbapi)
+[2025-09-18 11:53:29] [ERROR] [api.v1.trajectory] Error getting trajectory for campaign 4983793: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.DataError'>: invalid input for query argument $1: '4983793' ('str' object cannot be interpreted as an integer)
+[SQL: 
+            SELECT report_month, cost_per_lead, leads, spend
+            FROM heartbeat_etl.spend_revenue_performance_current
+            WHERE campaign_id = $1
+              AND cost_per_lead IS NOT NULL
+            ORDER BY report_month DESC
+            LIMIT 12
+        ]
+[parameters: ('4983793',)]
+(Background on this error at: https://sqlalche.me/e/20/dbapi)
+[2025-09-18 11:53:52] [ERROR] [api.v1.trajectory] Error getting trajectory for campaign 4983793: 'str' object has no attribute 'strftime'
