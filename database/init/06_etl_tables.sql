@@ -227,27 +227,22 @@ CREATE TABLE IF NOT EXISTS heartbeat_salesforce.sf_partner_pipeline (
     UNIQUE(opportunity_name, account_name, created_date)
 );
 
--- SF Partner Calls (NEW)
+-- SF Partner Calls (Activity/Task Data)
 CREATE TABLE IF NOT EXISTS heartbeat_salesforce.sf_partner_calls (
     id SERIAL PRIMARY KEY,
-    call_id TEXT,
-    partner_name TEXT,
-    account_name TEXT,
-    contact_name TEXT,
-    call_date DATE,
-    call_time TIME,
-    call_duration_minutes NUMERIC,
-    call_type TEXT,
-    call_outcome TEXT,
-    follow_up_required BOOLEAN,
-    next_call_date DATE,
-    notes TEXT,
-    created_by TEXT,
-    last_modified_date TIMESTAMP,
+    account TEXT,
+    contact TEXT,
+    due_date DATE,
+    lead TEXT,
+    opportunity TEXT,
+    priority TEXT,
+    status TEXT,
+    subject TEXT,
+    task BOOLEAN,
     snapshot_date DATE,
     extracted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     source_file TEXT,
-    UNIQUE(call_id, partner_name, call_date)
+    UNIQUE(account, contact, due_date)
 );
 
 -- SF Tim King Partner Pipeline (NEW)

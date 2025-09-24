@@ -100,17 +100,79 @@ def _classic_origin(page) -> str:
     raise RuntimeError(f"Cannot determine Classic origin from host '{host}'")
 
 def _rest_fetch_report_json(page, report_id: str) -> Dict[str, Any]:
-    origin, sid = _sf_origin_and_sid(page)
-    api = f"{origin}/services/data/v60.0/analytics/reports/{report_id}"
-    # includeDetails=true returns detail rows; CSV comes from flattening this JSON
-    resp = page.request.get(api + "?includeDetails=true", headers={"Authorization": f"Bearer {sid}"}, timeout=60_000)
-    if resp.status != 200:
-        raise RuntimeError(f"Reports API HTTP {resp.status}: {resp.text()[:500]}")
-    body = resp.body()
-    if not body or body[:1] not in (b"{", b"["):
-        # not JSON → probably HTML or empty
-        raise RuntimeError("Reports API did not return JSON (auth redirect or error HTML).")
-    return json.loads(body.decode("utf-8", errors="replace"))
+    """Robust REST API fetch with automatic report execution fallback."""
+    print(f"[DEBUG] Attempting REST API export for report {report_id}")
+
+    # Get session info from browser cookies
+    cookies = page.context.cookies()
+    session_cookie = None
+
+    # Prefer the Classic origin derived from the current Lightning URL
+    classic_origin = _classic_origin(page)  # e.g., https://sso.my.salesforce.com
+    server_url = classic_origin
+
+    for cookie in cookies:
+        if cookie['name'] == 'sid':
+            session_cookie = cookie['value']
+            # If cookie says "*.my.salesforce.com" with a subdomain, use that.
+            domain = cookie.get('domain', '').lstrip('.')
+            if domain.endswith('my.salesforce.com') and domain.count('.') >= 2:
+                # has a subdomain like sso.my.salesforce.com or naXX.my.salesforce.com
+                server_url = f"https://{domain}"
+            break
+
+    if not session_cookie:
+        raise RuntimeError("No Salesforce session cookie found")
+
+    print(f"[DEBUG] Found session cookie, server: {server_url}")
+
+    # Make API request using Playwright's request context
+    api_url = f"{server_url}/services/data/v60.0/analytics/reports/{report_id}?includeDetails=true"
+
+    try:
+        # Use page context to make authenticated request
+        response = page.request.get(api_url, headers={
+            'Authorization': f'Bearer {session_cookie}',
+            'Accept': 'application/json'
+        }, timeout=60000)
+
+        if response.status != 200:
+            raise RuntimeError(f"API request failed with status {response.status}: {response.text()}")
+
+        # Parse JSON response
+        report_data = response.json()
+        print(f"[DEBUG] Successfully retrieved report data from API")
+
+        # Check if report has data rows
+        fact_map = report_data.get("factMap", {})
+        detail_rows = []
+        for key, fact in fact_map.items():
+            if isinstance(fact, dict) and "rows" in fact:
+                detail_rows.extend(fact["rows"] or [])
+
+        if not detail_rows:
+            # Some Lightning reports require an instance run to materialize detail rows
+            print("[DEBUG] No rows found, attempting to run report...")
+            run_url = f"{server_url}/services/data/v60.0/analytics/reports/{report_id}"
+            run_resp = page.request.post(
+                run_url,
+                headers={
+                    "Authorization": f"Bearer {session_cookie}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                data=json.dumps({"reportMetadata": report_data.get("reportMetadata", {})})
+            )
+            if run_resp.status == 200:
+                report_data = run_resp.json()
+                print(f"[DEBUG] Successfully executed report and retrieved fresh data")
+            else:
+                print(f"[WARNING] Report execution failed with status {run_resp.status}")
+
+        return report_data
+
+    except Exception as e:
+        raise RuntimeError(f"REST API fetch failed: {e}")
 
 def _flatten_salesforce_report(json_obj: Dict[str, Any]) -> (List[str], List[List[Any]]):
     """

@@ -81,10 +81,10 @@ class ETLPipelineOrchestrator:
 
                 if success:
                     self.pipeline_stats["success_count"] += 1
-                    self.logger.info(f"✓ {source} extraction completed in {duration:.2f}s")
+                    self.logger.info(f"[SUCCESS] {source} extraction completed in {duration:.2f}s")
                 else:
                     self.pipeline_stats["failure_count"] += 1
-                    self.logger.error(f"✗ {source} extraction failed")
+                    self.logger.error(f"[FAILED] {source} extraction failed")
 
             except Exception as e:
                 self.pipeline_stats["failure_count"] += 1
@@ -117,7 +117,7 @@ class ETLPipelineOrchestrator:
             loading_result = await loader.load_all_data(extract_date)
 
             if loading_result["status"] == "completed":
-                self.logger.info(f"✓ Loading phase completed successfully")
+                self.logger.info(f"[SUCCESS] Loading phase completed successfully")
                 self.logger.info(f"Files processed: {loading_result['load_stats']['files_processed']}")
                 self.logger.info(f"Total rows loaded: {loading_result['load_stats']['total_rows_loaded']}")
             else:
@@ -186,7 +186,7 @@ class ETLPipelineOrchestrator:
                             continue
 
                     await session.commit()
-                    self.logger.info("✓ ETL tables created successfully")
+                    self.logger.info("[SUCCESS] ETL tables created successfully")
                 else:
                     self.logger.warning("ETL tables script not found, skipping schema setup")
 
@@ -307,15 +307,15 @@ class ETLPipelineOrchestrator:
         print("="*80)
 
         # Overall status
-        status_emoji = "✓" if result["status"] in ["completed", "partial"] else "✗"
+        status_emoji = "[OK]" if result["status"] in ["completed", "partial"] else "[FAIL]"
         print(f"Overall Status: {status_emoji} {result['status'].upper()}")
 
         if "summary" in result:
             summary = result["summary"]
             print(f"Total Duration: {summary['total_duration']:.2f} seconds")
-            print(f"Extraction: {'✓' if summary['extraction_success'] else '✗'}")
-            print(f"Loading: {'✓' if summary['loading_success'] else '✗'}")
-            print(f"Analytics: {'✓' if summary['analytics_refreshed'] else '✗'}")
+            print(f"Extraction: {'[SUCCESS]' if summary['extraction_success'] else '[FAILED]'}")
+            print(f"Loading: {'[SUCCESS]' if summary['loading_success'] else '[FAILED]'}")
+            print(f"Analytics: {'[SUCCESS]' if summary['analytics_refreshed'] else '[FAILED]'}")
 
         # Extraction results
         if "extraction_results" in result["pipeline_stats"]:
@@ -323,7 +323,7 @@ class ETLPipelineOrchestrator:
             if not extraction.get("skipped"):
                 print(f"\nExtraction Results:")
                 for source, ext_result in extraction.items():
-                    status_char = "✓" if ext_result.get("status") == "success" else "✗"
+                    status_char = "[OK]" if ext_result.get("status") == "success" else "[FAIL]"
                     duration = ext_result.get("duration", 0)
                     print(f"  {status_char} {source}: {duration:.2f}s")
 
@@ -340,7 +340,7 @@ class ETLPipelineOrchestrator:
                 if "file_results" in loading:
                     print("  File Details:")
                     for source, file_result in loading["file_results"].items():
-                        status_char = "✓" if file_result.get("status") == "success" else "✗"
+                        status_char = "[OK]" if file_result.get("status") == "success" else "[FAIL]"
                         rows = file_result.get("rows_processed", 0)
                         print(f"    {status_char} {source}: {rows} rows")
 
