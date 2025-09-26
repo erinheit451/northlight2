@@ -47,9 +47,10 @@ async def get_campaign_trajectory(
         maid = current_data.maid
 
         # Get agreed CPL data for additional context
+        # Use accessible heartbeat_performance schema instead of restricted heartbeat_etl
         agreed_query = text("""
-            SELECT cpl_agreed, cpl_mcid, cycle_start_date
-            FROM heartbeat_etl.agreed_cpl_performance
+            SELECT agreed_cpl, mcid, measurement_period_start
+            FROM heartbeat_performance.agreed_cpl_performance
             WHERE campaign_id = :campaign_id
             LIMIT 1
         """)
@@ -66,7 +67,7 @@ async def get_campaign_trajectory(
 
         historical_query = text("""
             SELECT report_month, cost_per_lead, leads, spend
-            FROM heartbeat_etl.spend_revenue_performance_current
+            FROM book.raw_heartbeat_spend_revenue_performance_current
             WHERE campaign_id = :campaign_id
               AND cost_per_lead IS NOT NULL
             ORDER BY report_month DESC
@@ -86,7 +87,7 @@ async def get_campaign_trajectory(
         if len(historical_data) < 3 and maid:  # If we need more data and have MAID
             maid_query = text("""
                 SELECT report_month, cost_per_lead, leads, spend
-                FROM heartbeat_etl.spend_revenue_performance_current
+                FROM book.raw_heartbeat_spend_revenue_performance_current
                 WHERE maid = :maid
                   AND cost_per_lead IS NOT NULL
                 ORDER BY report_month DESC
@@ -114,7 +115,7 @@ async def get_campaign_trajectory(
 
             fallback_query = text("""
                 SELECT report_month, cost_per_lead, leads, spend
-                FROM heartbeat_etl.spend_revenue_performance_current
+                FROM book.raw_heartbeat_spend_revenue_performance_current
                 WHERE business_name = :partner_name
                   AND cost_per_lead IS NOT NULL
                   AND (:keywords = '' OR campaign_name ILIKE '%' || :keywords || '%')
@@ -187,9 +188,20 @@ async def get_campaign_trajectory(
             if row.cost_per_lead is not None
         ]
 
-        # Calculate trajectory metrics
+        # Calculate trajectory metrics, but track if we used campaign-specific vs MAID fallback data
+        # Count how many records are actually from this specific campaign
+        campaign_specific_count = 0
+        if campaign_id_int is not None:
+            for row in historical_data:
+                if hasattr(row, 'campaign_id') and row.campaign_id == campaign_id_int:
+                    campaign_specific_count += 1
+
+        # Consider it campaign-specific only if most of the data is from this campaign
+        total_records = len(historical_data)
+        is_campaign_specific = campaign_specific_count >= max(3, total_records * 0.8)
+
         trajectory_data = _calculate_trajectory_metrics(
-            historical_points, current_cpl, goal_cpl, campaign_age_days, io_cycle
+            historical_points, current_cpl, goal_cpl, campaign_age_days, io_cycle, is_campaign_specific
         )
 
         # Add additional context
@@ -197,9 +209,9 @@ async def get_campaign_trajectory(
             "campaign_id": campaign_id,
             "campaign_name": campaign_name,
             "partner_name": partner_name,
-            "agreed_cpl": float(agreed_data.cpl_agreed) if agreed_data and agreed_data.cpl_agreed else None,
-            "mcid_cpl": float(agreed_data.cpl_mcid) if agreed_data and agreed_data.cpl_mcid else None,
-            "cycle_start": agreed_data.cycle_start_date.strftime("%Y-%m-%d") if agreed_data and hasattr(agreed_data.cycle_start_date, 'strftime') and agreed_data.cycle_start_date else str(agreed_data.cycle_start_date) if agreed_data and agreed_data.cycle_start_date else None
+            "agreed_cpl": float(agreed_data.agreed_cpl) if agreed_data and agreed_data.agreed_cpl else None,
+            "mcid_cpl": float(agreed_data.mcid) if agreed_data and agreed_data.mcid else None,
+            "cycle_start": agreed_data.measurement_period_start.strftime("%Y-%m-%d") if agreed_data and hasattr(agreed_data.measurement_period_start, 'strftime') and agreed_data.measurement_period_start else str(agreed_data.measurement_period_start) if agreed_data and agreed_data.measurement_period_start else None
         })
 
         return trajectory_data
@@ -232,7 +244,8 @@ def _calculate_trajectory_metrics(
     current_cpl: Optional[float],
     goal_cpl: Optional[float],
     campaign_age_days: int,
-    io_cycle: Optional[int] = None
+    io_cycle: Optional[int] = None,
+    is_campaign_specific: bool = True
 ) -> Dict[str, Any]:
     """Calculate trajectory metrics from historical data."""
 
@@ -274,8 +287,13 @@ def _calculate_trajectory_metrics(
     # Generate sparkline
     sparkline = _generate_sparkline(cpl_values[-7:])  # Last 7 points
 
-    # Calculate time-based metrics
-    metrics = _calculate_time_metrics(historical_points)
+    # Calculate time-based metrics, but only show historical CPL averages for campaign-specific data
+    # For Early Accounts (<90 days with MAID fallback data), suppress historical CPL to avoid misleading "Early Account" detection
+    if is_campaign_specific or campaign_age_days >= 90:
+        metrics = _calculate_time_metrics(historical_points)
+    else:
+        # Show only current performance for truly early campaigns using MAID fallback data
+        metrics = {"last_30d_avg": None, "last_60d_avg": None, "last_90d_avg": None, "ytd_avg": None}
 
     return {
         "current_cpl": current_cpl,
@@ -286,7 +304,8 @@ def _calculate_trajectory_metrics(
         "sparkline": sparkline,
         "metrics": metrics,
         "data_points": len(historical_points),
-        "earliest_data": historical_points[-1]["month"] if historical_points else None
+        "earliest_data": historical_points[-1]["month"] if historical_points else None,
+        "is_campaign_specific": is_campaign_specific  # Add flag for debugging/UI logic
     }
 
 
@@ -404,7 +423,4 @@ def _calculate_time_metrics(historical_points: List[Dict]) -> Dict[str, Optional
         "last_60d_avg": statistics.mean(last_60d_data) if last_60d_data else None,
         "last_90d_avg": statistics.mean(last_90d_data) if last_90d_data else None,
         "ytd_avg": statistics.mean(ytd_data) if ytd_data else None
-    }# Updated Thu, Sep 18, 2025 11:37:19 AM
-# Force reload
-# Force reload Thu, Sep 18, 2025 12:14:51 PM
-# Force reload Thu, Sep 18, 2025 18:01:34 PM
+    }# Updated Sept 25, 2025 - Fixed schema and column issues
