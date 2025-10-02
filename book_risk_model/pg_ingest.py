@@ -533,7 +533,7 @@ async def enrich_with_performance_metrics(df: pd.DataFrame, conn) -> pd.DataFram
             leads,
             spend,
             report_month,
-            business_name,
+            cobrand as business_name,
             area
         FROM book.raw_heartbeat_spend_revenue_performance_current
         WHERE campaign_id::text = ANY($1)
