@@ -16,8 +16,10 @@ sys.path.insert(0, str(project_root))
 
 # Import risk calculation modules
 from book_risk_model.core.churn import calculate_churn_probability
+from book_risk_model.core.rules import process_campaign_goals
 from book_risk_model.partner_gm_mapping import correct_gm_by_partner
 from book_risk_model.core.flare import attach_priority_and_flare, compute_priority_v2
+from book_risk_model.advertiser_lifetime import calculate_advertiser_lifetime
 from book_risk_model.constants import *
 
 DATABASE_URL = "postgresql://northlight_user:northlight_secure_2024@localhost:5432/unified_northlight"
@@ -309,6 +311,10 @@ def apply_risk_calculations(df: pd.DataFrame) -> pd.DataFrame:
     # Prepare required columns for risk calculations
     df = prepare_columns_for_risk_calc(df)
 
+    # Process campaign goals (calculates cpl_variance_pct, effective_cpl_goal, risk_cpl_goal)
+    print("  Processing campaign goals...")
+    df = process_campaign_goals(df)
+
     # Calculate churn probability using business logic
     print("  Calculating churn probabilities...")
     df = calculate_churn_probability(df)
@@ -493,6 +499,8 @@ def prepare_columns_for_risk_calc(df: pd.DataFrame) -> pd.DataFrame:
         'bsc_cpc_average': 3.0,  # Default CPC
         'leads_rolling_30d': None,  # Will be handled by zero-lead logic
         'true_days_running': None,  # Will use calculated value
+        'maturity_amplifier': 1.0,  # Default maturity amplifier for categorize_issues()
+        'unified_performance_score': 0,  # Default performance score for categorize_issues()
     }
 
     for col, default_val in required_columns.items():
@@ -745,6 +753,9 @@ async def load_health_data() -> pd.DataFrame:
 
             # Enrich with performance metrics before risk calculations
             df = await enrich_with_performance_metrics(df, conn)
+
+            # Calculate advertiser lifetime (MAID-level historical data)
+            df = await calculate_advertiser_lifetime(df, conn)
 
             # Apply real risk calculations instead of defaults
             df = apply_risk_calculations(df)

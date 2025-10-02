@@ -51,18 +51,24 @@ class BookDataTransformer:
         # Basic processing - add required fields
         df = health_data.copy()
 
-        # Add default risk scores for now
-        df['churn_prob_90d'] = 0.15  # Default 15% churn probability
-        df['flare_score'] = 50.0     # Default moderate score
-        df['priority_index'] = 50.0  # Default priority
-        df['priority_tier'] = 'P3 - MEDIUM'  # Default tier
-        df['primary_issue'] = 'Monitoring'
-        df['headline_diagnosis'] = 'Campaign under review'
-        df['risk_drivers_json'] = [{} for _ in range(len(df))]  # Create list of empty dicts
-        df['diagnosis_pills'] = [[] for _ in range(len(df))]    # Create list of empty lists
-        df['is_safe'] = False
+        # Use calculated risk scores from pg_ingest.py (don't override them)
+        # The load_health_data() function already includes real risk calculations
 
-        print(f"Processed {len(df)} campaigns with basic risk scores")
+        # Deduplicate by campaign_id (keep the first occurrence)
+        original_count = len(df)
+        df = df.drop_duplicates(subset=['campaign_id'], keep='first')
+        if len(df) < original_count:
+            print(f"Removed {original_count - len(df)} duplicate campaign IDs")
+
+        # Only add missing required fields with defaults
+        if 'risk_drivers_json' not in df.columns:
+            df['risk_drivers_json'] = [{} for _ in range(len(df))]
+        if 'diagnosis_pills' not in df.columns:
+            df['diagnosis_pills'] = [[] for _ in range(len(df))]
+        if 'is_safe' not in df.columns:
+            df['is_safe'] = False
+
+        print(f"Processed {len(df)} campaigns with calculated risk scores")
         return df
 
     async def save_to_database(self, df: pd.DataFrame):
@@ -73,6 +79,8 @@ class BookDataTransformer:
             # Clear existing data
             from sqlalchemy import text
             await session.execute(text("DELETE FROM book.campaigns"))
+            await session.commit()
+            print("Existing data cleared")
 
             for idx, row in df.iterrows():
                 try:
@@ -107,6 +115,17 @@ class BookDataTransformer:
                         cpl_goal=self.safe_decimal(row.get('cpl_goal')),
                         bsc_cpl_avg=self.safe_decimal(row.get('bsc_cpl_avg')),
                         effective_cpl_goal=self.safe_decimal(row.get('effective_cpl_goal')),
+
+                        # Expected leads (calculated values)
+                        expected_leads_monthly=self.safe_int(row.get('expected_leads_monthly')),
+                        expected_leads_to_date=self.safe_int(row.get('expected_leads_to_date')),
+                        expected_leads_to_date_spend=self.safe_decimal(row.get('expected_leads_to_date_spend')),
+                        # Advertiser Lifetime (MAID-level data)
+                        advertiser_lifetime_days=self.safe_int(row.get('advertiser_lifetime_days')),
+                        advertiser_lifetime_months=self.safe_decimal(row.get('advertiser_lifetime_months')),
+                        advertiser_first_seen=row.get('advertiser_first_seen'),
+                        advertiser_latest_data=row.get('advertiser_latest_data'),
+
 
                         # Risk scores
                         churn_prob_90d=self.safe_decimal(row.get('churn_prob_90d')),
