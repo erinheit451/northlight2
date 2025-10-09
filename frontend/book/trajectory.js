@@ -4,6 +4,35 @@
 // Cache for trajectory data to avoid repeated API calls
 const trajectoryCache = new Map();
 
+// API bases for trajectory requests - prioritize same origin for dynamic port detection
+const API_BASES = [...new Set([
+  window.location.origin,     // Use same origin as page (works for any port: 4000, 8000, etc.)
+  'http://localhost:4000',    // Explicit local development server (correct port)
+  'http://localhost:8006',    // Legacy fallback
+  'http://localhost:8000',    // Legacy fallback
+  'https://northlight-wsgw.onrender.com',
+  'https://northlight-api-dev.onrender.com',
+])];
+
+// Fetch from any available API base
+async function fetchFromAny(path, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const suffix = qs ? `?${qs}` : ''; // Only add ? if query string is not empty
+  for (const base of API_BASES) {
+    try {
+      const url = `${base}${path}${suffix}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        return res;
+      }
+    } catch (error) {
+      // Try next base
+      continue;
+    }
+  }
+  throw new Error(`Failed to fetch from any API base: ${path}`);
+}
+
 /**
  * Render trajectory section for a campaign card
  * @param {string} campaignId - The campaign ID
@@ -21,11 +50,7 @@ export async function renderTrajectorySection(campaignId, container) {
     container.innerHTML = '<div class="trajectory-loading">Loading trajectory...</div>';
 
     // Fetch trajectory data
-    const response = await fetch(`/api/v1/trajectory/campaign/${campaignId}`);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    const response = await fetchFromAny(`/api/v1/trajectory/campaign/${campaignId}`);
 
     const trajectoryData = await response.json();
 
@@ -67,17 +92,20 @@ function renderTrajectoryUI(data, container) {
  * Render trajectory for new campaigns with no historical data
  */
 function renderNewCampaignState(data, container) {
-  const { current_cpl, goal_cpl, campaign_age_days } = data;
+  const { total_campaign_age_days, campaign_age_days, io_cycle, earliest_data } = data;
+
+  // Use total campaign age if available, otherwise fall back to current cycle days
+  const displayAgeDays = total_campaign_age_days || campaign_age_days;
+  const ageDisplay = io_cycle && io_cycle > 3
+    ? `${io_cycle} months`
+    : `${displayAgeDays} days`;
 
   container.innerHTML = `
     <div class="trajectory-section new-campaign">
       <div class="trajectory-header">
-        📊 New Campaign (${campaign_age_days} days)
+        📊 New Campaign (${ageDisplay})
       </div>
-      <div class="trajectory-metrics">
-        Current: ${formatCPL(current_cpl)} • Goal: ${formatCPL(goal_cpl)}
-      </div>
-      <div class="trajectory-note">Building trajectory data...</div>
+      <div class="trajectory-note">Building historical CPL data...</div>
     </div>
   `;
 }
@@ -86,20 +114,15 @@ function renderNewCampaignState(data, container) {
  * Render trajectory for campaigns with limited historical data
  */
 function renderLimitedDataState(data, container) {
-  const { current_cpl, goal_cpl, trend, earliest_data, data_points } = data;
-
-  const trendIcon = getTrendIcon(trend.direction);
-  const trendText = trend.direction !== 'insufficient_data'
-    ? `${trendIcon} ${formatTrendText(trend)}`
-    : 'Building trend data';
+  const { current_cpl, metrics } = data;
 
   container.innerHTML = `
     <div class="trajectory-section limited-data">
       <div class="trajectory-header">
-        📊 ${trendText}
+        📊 Historical CPL
       </div>
       <div class="trajectory-metrics">
-        Current: ${formatCPL(current_cpl)} • Goal: ${formatCPL(goal_cpl)} • Since: ${formatDate(earliest_data)}
+        Current: ${formatCPL(current_cpl)} • ${formatHistoricalCPL(metrics)}
       </div>
     </div>
   `;
@@ -109,18 +132,17 @@ function renderLimitedDataState(data, container) {
  * Render full trajectory with sparkline and metrics
  */
 function renderFullTrajectoryState(data, container) {
-  const { current_cpl, goal_cpl, trend, sparkline, metrics } = data;
+  const { current_cpl, sparkline, metrics } = data;
 
-  const trendIcon = getTrendIcon(trend.direction);
   const sparklineHTML = renderSparkline(sparkline);
 
   container.innerHTML = `
     <div class="trajectory-section full-data">
       <div class="trajectory-header">
-        📊 Trajectory: ${trendIcon} ${formatTrendText(trend)} ${sparklineHTML} Goal: ${formatCPL(goal_cpl)}
+        📊 Historical CPL ${sparklineHTML}
       </div>
       <div class="trajectory-metrics">
-        ${formatTimeMetrics(metrics)}
+        Current: ${formatCPL(current_cpl)} • ${formatHistoricalCPL(metrics)}
       </div>
     </div>
   `;
@@ -185,24 +207,24 @@ function renderSparkline(sparkline) {
 }
 
 /**
- * Format time-based metrics
+ * Format historical CPL data in the requested format: [current] [30d] [60d] [90d]
  */
-function formatTimeMetrics(metrics) {
+function formatHistoricalCPL(metrics) {
   const parts = [];
 
   if (metrics.last_30d_avg !== null) {
-    parts.push(`Last 30d: ${formatCPL(metrics.last_30d_avg)}`);
+    parts.push(`30d: ${formatCPL(metrics.last_30d_avg)}`);
+  }
+
+  if (metrics.last_60d_avg !== null) {
+    parts.push(`60d: ${formatCPL(metrics.last_60d_avg)}`);
   }
 
   if (metrics.last_90d_avg !== null) {
-    parts.push(`Last 90d: ${formatCPL(metrics.last_90d_avg)}`);
+    parts.push(`90d: ${formatCPL(metrics.last_90d_avg)}`);
   }
 
-  if (metrics.ytd_avg !== null) {
-    parts.push(`YTD: ${formatCPL(metrics.ytd_avg)}`);
-  }
-
-  return parts.join(' • ') || 'Calculating metrics...';
+  return parts.join(' • ') || 'Building historical data...';
 }
 
 /**
@@ -250,11 +272,9 @@ export async function preloadTrajectoryData(campaignIds) {
   const promises = campaignIds.map(async (campaignId) => {
     if (!trajectoryCache.has(campaignId)) {
       try {
-        const response = await fetch(`/api/v1/trajectory/campaign/${campaignId}`);
-        if (response.ok) {
-          const data = await response.json();
-          trajectoryCache.set(campaignId, data);
-        }
+        const response = await fetchFromAny(`/api/v1/trajectory/campaign/${campaignId}`);
+        const data = await response.json();
+        trajectoryCache.set(campaignId, data);
       } catch (error) {
         console.warn(`Failed to preload trajectory for ${campaignId}:`, error);
       }

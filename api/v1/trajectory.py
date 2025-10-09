@@ -66,39 +66,35 @@ async def get_campaign_trajectory(
             campaign_id_int = None
 
         historical_query = text("""
-            SELECT report_month, cost_per_lead, leads, spend
-            FROM book.raw_heartbeat_spend_revenue_performance_current
-            WHERE campaign_id = :campaign_id
-              AND cost_per_lead IS NOT NULL
+            SELECT report_month, cpl as cost_per_lead, leads_generated as leads, amount_spent as spend
+            FROM heartbeat_performance.spend_revenue_performance
+            WHERE campaign_id = :campaign_id_str
+              AND cpl IS NOT NULL
             ORDER BY report_month DESC
             LIMIT 12
         """)
 
-        # Skip query if campaign_id_int is None (couldn't convert to int)
-        if campaign_id_int is not None:
-            historical_result = await db.execute(historical_query, {"campaign_id": campaign_id_int})
-            historical_data = historical_result.fetchall()
-        else:
-            historical_data = []
+        # Execute query using campaign_id as string (TEXT column in heartbeat_performance)
+        historical_result = await db.execute(historical_query, {"campaign_id_str": campaign_id})
+        historical_data = historical_result.fetchall()
 
         logger.info(f"Campaign {campaign_id}: Direct query found {len(historical_data)} records")
 
         # MAID-based query: Get full historical data for the same advertiser (MAID)
         if len(historical_data) < 3 and maid:  # If we need more data and have MAID
             maid_query = text("""
-                SELECT report_month, cost_per_lead, leads, spend
-                FROM book.raw_heartbeat_spend_revenue_performance_current
-                WHERE maid = :maid
-                  AND cost_per_lead IS NOT NULL
+                SELECT report_month, cpl as cost_per_lead, leads_generated as leads, amount_spent as spend
+                FROM heartbeat_performance.spend_revenue_performance
+                WHERE maid = :maid_str
+                  AND cpl IS NOT NULL
                 ORDER BY report_month DESC
                 LIMIT 24
             """)
 
             logger.info(f"Campaign {campaign_id}: Trying MAID-based query with MAID {maid}")
 
-            # Convert MAID to integer if needed
-            maid_int = int(maid) if maid and str(maid).isdigit() else maid
-            maid_result = await db.execute(maid_query, {"maid": maid_int})
+            # Use MAID as string (TEXT column in heartbeat_performance)
+            maid_result = await db.execute(maid_query, {"maid_str": str(maid)})
             maid_data = maid_result.fetchall()
 
             logger.info(f"Campaign {campaign_id}: MAID query found {len(maid_data)} records")
@@ -114,10 +110,10 @@ async def get_campaign_trajectory(
             campaign_keywords = _extract_campaign_keywords(campaign_name)
 
             fallback_query = text("""
-                SELECT report_month, cost_per_lead, leads, spend
-                FROM book.raw_heartbeat_spend_revenue_performance_current
-                WHERE business_name = :partner_name
-                  AND cost_per_lead IS NOT NULL
+                SELECT report_month, cpl as cost_per_lead, leads_generated as leads, amount_spent as spend
+                FROM heartbeat_performance.spend_revenue_performance
+                WHERE advertiser_name = :partner_name
+                  AND cpl IS NOT NULL
                   AND (:keywords = '' OR campaign_name ILIKE '%' || :keywords || '%')
                 ORDER BY report_month DESC
                 LIMIT 12
@@ -164,8 +160,8 @@ async def get_campaign_trajectory(
                     # Convert snapshot_date to month format
                     month_str = row.snapshot_date.strftime("%Y-%m") if hasattr(row.snapshot_date, 'strftime') else str(row.snapshot_date)[:7]
 
-                    # Check if we already have data for this month
-                    existing_months = [point.get("month") for point in historical_data]
+                    # Check if we already have data for this month (historical_data contains Row objects)
+                    existing_months = [str(point.report_month)[:7] if hasattr(point, 'report_month') and point.report_month else None for point in historical_data]
                     if month_str not in existing_months:
                         historical_data.append(type('Row', (), {
                             'report_month': month_str,
@@ -287,18 +283,19 @@ def _calculate_trajectory_metrics(
     # Generate sparkline
     sparkline = _generate_sparkline(cpl_values[-7:])  # Last 7 points
 
-    # Calculate time-based metrics, but only show historical CPL averages for campaign-specific data
-    # For Early Accounts (<90 days with MAID fallback data), suppress historical CPL to avoid misleading "Early Account" detection
-    if is_campaign_specific or campaign_age_days >= 90:
-        metrics = _calculate_time_metrics(historical_points)
-    else:
-        # Show only current performance for truly early campaigns using MAID fallback data
-        metrics = {"last_30d_avg": None, "last_60d_avg": None, "last_90d_avg": None, "ytd_avg": None}
+    # Calculate time-based metrics - ALWAYS show for campaigns with historical data
+    # The MAID data represents the advertiser's historical performance which is valuable context
+    metrics = _calculate_time_metrics(historical_points)
+
+    # Calculate total campaign age from io_cycle (io_cycle = number of months)
+    total_campaign_age_days = (io_cycle * 30) if io_cycle and io_cycle > 0 else campaign_age_days
 
     return {
         "current_cpl": current_cpl,
         "goal_cpl": goal_cpl,
-        "campaign_age_days": campaign_age_days,
+        "campaign_age_days": campaign_age_days,  # Days in current cycle
+        "total_campaign_age_days": total_campaign_age_days,  # Total account lifetime
+        "io_cycle": io_cycle,  # Number of billing cycles (months)
         "data_quality": data_quality,
         "trend": trend,
         "sparkline": sparkline,
@@ -314,14 +311,14 @@ def _assess_data_quality(data_points: int, campaign_age_days: int, io_cycle: Opt
     if data_points == 0:
         return "none"
 
-    # Consider both current cycle days and total campaign history (IO cycles)
-    # If campaign has many IO cycles, it's mature regardless of current cycle age
-    total_campaign_months = io_cycle or 1
-    is_mature_campaign = total_campaign_months >= 6  # 6+ months of history
+    # io_cycle represents the CYCLE NUMBER (e.g., io_cycle=71 means 71 months old)
+    # Use this as the total campaign lifetime, not days_elapsed which is just current cycle days
+    total_campaign_months = io_cycle if io_cycle and io_cycle > 0 else 1
+    is_mature_campaign = total_campaign_months >= 3  # 3+ months of history (changed from 6)
 
     if data_points < 3:
         return "limited" if is_mature_campaign else "none"
-    elif data_points < 6 or (campaign_age_days < 60 and not is_mature_campaign):
+    elif data_points < 6:
         return "limited"
     elif data_points < 9:
         return "moderate"
@@ -386,6 +383,10 @@ def _generate_sparkline(cpl_values: List[float]) -> List[int]:
 
 def _calculate_time_metrics(historical_points: List[Dict]) -> Dict[str, Optional[float]]:
     """Calculate time-based average CPL metrics."""
+    logger.info(f"_calculate_time_metrics called with {len(historical_points) if historical_points else 0} points")
+    if historical_points and len(historical_points) > 0:
+        logger.info(f"First 3 points: {historical_points[:3]}")
+
     if not historical_points:
         return {"last_30d_avg": None, "last_60d_avg": None, "last_90d_avg": None, "ytd_avg": None}
 
@@ -405,6 +406,8 @@ def _calculate_time_metrics(historical_points: List[Dict]) -> Dict[str, Optional
             point_date = datetime.strptime(point["month"], "%Y-%m")
             days_ago = (now - point_date).days
 
+            logger.debug(f"Processing point: month={point['month']}, days_ago={days_ago}, cpl={point['cpl']}")
+
             # Group by day-based periods (monthly data means we approximate)
             if days_ago <= 45:  # Approximate last 30 days (allowing for monthly granularity)
                 last_30d_data.append(point["cpl"])
@@ -415,8 +418,11 @@ def _calculate_time_metrics(historical_points: List[Dict]) -> Dict[str, Optional
             if point_date.year == now.year:  # Year to date
                 ytd_data.append(point["cpl"])
 
-        except ValueError:
+        except ValueError as e:
+            logger.warning(f"Failed to parse date {point['month']}: {e}")
             continue
+
+    logger.info(f"Time metrics calculated: 30d={len(last_30d_data)} points, 60d={len(last_60d_data)} points, 90d={len(last_90d_data)} points, ytd={len(ytd_data)} points")
 
     return {
         "last_30d_avg": statistics.mean(last_30d_data) if last_30d_data else None,
