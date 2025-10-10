@@ -323,9 +323,146 @@ async function runBenchmarkAnalysis() {
     }
 }
 
+// Benchmark rendering utilities (from original Northlight)
+function fmtPct1(v) { return (v == null) ? "—" : `${(v*100).toFixed(1)}%`; }
+function fmtMoney(v){ return (v == null) ? "—" : `$${Number(v).toFixed(2)}`; }
+
+function ensureTargetRange(metricData, unit, metricName) {
+    if (metricData?.target_range?.low != null && metricData?.target_range?.high != null) {
+        return metricData.target_range;
+    }
+    const m = metricData?.median ?? metricData?.value ?? (unit === '%' ? 0.05 : (metricName === 'CPC' ? 3 : 50));
+    const p25 = metricData?.p25, p75 = metricData?.p75;
+    if (p25 != null && p75 != null) return { low: Math.max(0, p25), high: Math.max(p75, p25) };
+    const span = Math.max(0.00001, m * 0.15);
+    return { low: Math.max(0, m - span), high: m + span };
+}
+
+function deriveVerdict(value, targetRange, direction) {
+    if (value == null || targetRange?.low == null || targetRange?.high == null) return 'unknown';
+    const { low, high } = targetRange;
+    if (value >= low && value <= high) return 'on_target';
+    if (direction === 'lower-is-better') {
+        return (value < low) ? 'exceeds_target' : 'outside_target';
+    } else {
+        return (value > high) ? 'exceeds_target' : 'outside_target';
+    }
+}
+
+function roundUpToNiceCurrency(x) {
+    const targets = [0.5, 1, 2, 3, 5, 7.5, 10, 12, 15, 20, 25, 30, 40, 50, 60, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000];
+    const want = x * 1.15;
+    for (const t of targets) if (want <= t) return t;
+    return Math.ceil(want / 100) * 100;
+}
+
+function calculateBarData(userValue, targetRange, median, direction, metricUnit, metricName) {
+    if (!targetRange || targetRange.low == null || targetRange.high == null) {
+        targetRange = ensureTargetRange({ value: userValue, median }, metricUnit, metricName);
+    }
+
+    const baseTop = Math.max(userValue ?? 0, targetRange.high ?? 0, median ?? 0);
+    let minScale = 0, maxScale;
+    if (metricUnit === '%') {
+        maxScale = Math.min(1.0, Math.max(0.10, baseTop * 1.4));
+    } else {
+        maxScale = Math.max(baseTop * 1.4, targetRange.high * 1.6, (median || 0) * 1.5);
+        maxScale = roundUpToNiceCurrency(maxScale);
+    }
+
+    const totalRange = maxScale - minScale;
+    if (totalRange <= 0) return null;
+
+    let userSection = 'target-range';
+    if (userValue < targetRange.low) {
+        userSection = (direction === 'lower-is-better') ? 'excellent' : 'needs-improvement';
+    } else if (userValue > targetRange.high) {
+        userSection = (direction === 'lower-is-better') ? 'needs-improvement' : 'excellent';
+    }
+
+    const valueFormatter = metricUnit === '$' ? fmtMoney : fmtPct1;
+    const clamp01 = v => Math.max(0, Math.min(1, v));
+    const userPosition = clamp01((userValue - minScale) / totalRange) * 100;
+
+    let excellentWidth = clamp01((targetRange.low - minScale) / totalRange) * 100;
+    let targetWidth = clamp01((targetRange.high - targetRange.low) / totalRange) * 100;
+    let improvementWidth = Math.max(0, 100 - excellentWidth - targetWidth);
+
+    const sum = excellentWidth + targetWidth + improvementWidth;
+    if (sum !== 100 && sum > 0) {
+        excellentWidth = (excellentWidth / sum) * 100;
+        targetWidth = (targetWidth / sum) * 100;
+        improvementWidth = (improvementWidth / sum) * 100;
+    }
+
+    const sectionWidths = (direction === 'lower-is-better')
+        ? { 'excellent': excellentWidth, 'target-range': targetWidth, 'needs-improvement': improvementWidth }
+        : { 'needs-improvement': excellentWidth, 'target-range': targetWidth, 'excellent': improvementWidth };
+
+    const scalePoints = [
+        { value: minScale }, { value: targetRange.low },
+        { value: targetRange.high }, { value: maxScale }
+    ].map(p => ({
+        label: valueFormatter(p.value),
+        position: clamp01((p.value - minScale) / totalRange) * 100
+    }));
+
+    return { userValue, userPosition, userSection, sectionWidths, scalePoints, valueFormatter, direction, metricName };
+}
+
+function generateBar(data) {
+    if (!data) return '';
+    const scaleHtml = data.scalePoints.map(p => `<div class="scale-point" style="left: ${p.position}%; position:absolute; font-size:11px; transform:translateX(-50%);">${p.label}</div>`).join('');
+    const sections = (data.direction === 'lower-is-better')
+        ? ['excellent', 'target-range', 'needs-improvement']
+        : ['needs-improvement', 'target-range', 'excellent'];
+
+    const zoneColors = {
+        'excellent': '#10b981',
+        'target-range': '#3b82f6',
+        'needs-improvement': '#f59e0b'
+    };
+
+    return `
+        <div style="position:relative; height:30px; margin:20px 0 40px 0;">
+            <div style="position:relative; height:4px; top:25px;">${scaleHtml}</div>
+        </div>
+        <div style="display:flex; height:40px; border-radius:8px; overflow:hidden; position:relative;">
+            ${sections.map(key => `<div style="flex-basis: ${(data.sectionWidths[key] || 0)}%; background: ${zoneColors[key]}30; border-right: 1px solid #e5e7eb;"></div>`).join('')}
+            <div style="position:absolute; left:${data.userPosition}%; top:0; bottom:0; width:4px; background:${zoneColors[data.userSection]}; transform:translateX(-50%); z-index:10;">
+                <div style="position:absolute; top:-30px; left:50%; transform:translateX(-50%); background:${zoneColors[data.userSection]}; color:white; padding:4px 8px; border-radius:4px; white-space:nowrap; font-size:12px; font-weight:600;">
+                    ${data.valueFormatter(data.userValue)}
+                </div>
+            </div>
+        </div>
+        <div style="display:flex; margin-top:8px;">
+            ${sections.map(key => {
+                const labelText = key.replace(/-/g, ' ');
+                return `<div style="flex-basis: ${(data.sectionWidths[key] || 0)}%; text-align:center; text-transform:capitalize; font-size:11px; color:${zoneColors[key]}; font-weight:${data.userSection === key ? '700' : '500'};">${labelText}</div>`;
+            }).join('')}
+        </div>
+    `;
+}
+
 function displayBenchmarkResults(results) {
     const resultsSection = document.getElementById('results');
     resultsSection.style.display = 'block';
+
+    // Convert API response to format expected by rendering functions
+    const benchmarks = {
+        cpl: {
+            value: results.derived?.cpl,
+            median: results.benchmarks?.medians?.cpl
+        },
+        cpc: {
+            value: results.derived?.cpc,
+            median: results.benchmarks?.medians?.cpc
+        },
+        cr: {
+            value: results.derived?.cr,
+            median: results.benchmarks?.medians?.ctr // Using CTR as CR median approximation
+        }
+    };
 
     // Primary Status Block
     const primaryStatus = document.getElementById('primaryStatusBlock');
@@ -337,121 +474,77 @@ function displayBenchmarkResults(results) {
 
     primaryStatus.innerHTML = `
         <h4>Goal CPL Analysis</h4>
-        <div style="padding:16px;background:${goalStatusColor}20;border-left:4px solid ${goalStatusColor};border-radius:8px;margin-bottom:16px;">
+        <div style="padding:16px;background:${goalStatusColor}20;border-left:4px solid ${goalStatusColor};border-radius:8px;">
             <div style="font-size:18px;font-weight:600;color:${goalStatusColor};">${goalStatusText}</div>
             <div style="margin-top:8px;color:#374151;">
-                Your CPL: <strong>${formatCurrency(results.derived?.cpl)}</strong> |
-                Goal CPL: <strong>${formatCurrency(results.input?.goal_cpl)}</strong> |
-                Market Median: <strong>${formatCurrency(results.benchmarks?.medians?.cpl)}</strong>
+                Your CPL: <strong>${fmtMoney(results.derived?.cpl)}</strong> |
+                Goal CPL: <strong>${fmtMoney(results.input?.goal_cpl)}</strong> |
+                Market Median: <strong>${fmtMoney(results.benchmarks?.medians?.cpl)}</strong>
             </div>
-        </div>
-        <div class="metric-item">
-            <span class="metric-label">Recommended Action</span>
-            <span class="metric-value" style="text-transform:capitalize;">${results.diagnosis?.primary || 'Review metrics'}</span>
         </div>
     `;
 
-    // CPL Verdict
+    // CPL Verdict with Bar
     const cplVerdict = document.getElementById('cpl-verdict-container');
-    const cplRatio = results.derived?.cpl / results.benchmarks?.medians?.cpl;
-    const cplPerformance = cplRatio < 0.8 ? 'Excellent (Top Performer)' :
-                          cplRatio < 1.2 ? 'Good (Near Median)' :
-                          cplRatio < 1.5 ? 'Below Average' : 'Poor';
-    const cplColor = cplRatio < 0.8 ? '#10b981' :
-                    cplRatio < 1.2 ? '#3b82f6' :
-                    cplRatio < 1.5 ? '#f59e0b' : '#ef4444';
+    const cplTarget = ensureTargetRange(benchmarks.cpl, '$', 'CPL');
+    const cplVerdictType = deriveVerdict(benchmarks.cpl.value, cplTarget, 'lower-is-better');
+    const cplBarData = calculateBarData(benchmarks.cpl.value, cplTarget, benchmarks.cpl.median, 'lower-is-better', '$', 'CPL');
+    const cplVerdictLabels = { outside_target: "Outside Target", on_target: "On Target", exceeds_target: "Excellent", unknown: "Benchmark" };
+    const cplVerdictIcons = { outside_target: "⚠️", on_target: "🎯", exceeds_target: "🎉", unknown: "📊" };
 
     cplVerdict.innerHTML = `
-        <h4>Cost Per Lead (CPL) Analysis</h4>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
-            <div class="metric-item">
-                <span class="metric-label">Your CPL</span>
-                <span class="metric-value">${formatCurrency(results.derived?.cpl)}</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Market Median</span>
-                <span class="metric-value">${formatCurrency(results.benchmarks?.medians?.cpl)}</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Performance</span>
-                <span class="metric-value" style="color:${cplColor};">${cplPerformance}</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">vs Market</span>
-                <span class="metric-value" style="color:${cplColor};">${((cplRatio - 1) * 100).toFixed(0)}%</span>
-            </div>
+        <div style="font-size:14px; font-weight:600; color:#6b7280; margin-bottom:12px;">
+            ${cplVerdictIcons[cplVerdictType] || "📊"} ${cplVerdictLabels[cplVerdictType] || "Benchmark"}
         </div>
+        <div style="font-size:20px; font-weight:700; margin-bottom:8px;">Your CPL is ${fmtMoney(benchmarks.cpl.value)}</div>
+        <div style="font-size:13px; color:#6b7280; margin-bottom:16px;">
+            Target range: ${fmtMoney(cplTarget.low)}–${fmtMoney(cplTarget.high)}
+        </div>
+        ${generateBar(cplBarData)}
     `;
 
-    // CPC Verdict
+    // CPC Verdict with Bar
     const cpcVerdict = document.getElementById('cpc-verdict-container');
-    const cpcRatio = results.derived?.cpc / results.benchmarks?.medians?.cpc;
-    const cpcPerformance = cpcRatio < 0.8 ? 'Excellent' :
-                          cpcRatio < 1.2 ? 'Good' :
-                          cpcRatio < 1.5 ? 'Below Average' : 'Poor';
-    const cpcColor = cpcRatio < 0.8 ? '#10b981' :
-                    cpcRatio < 1.2 ? '#3b82f6' :
-                    cpcRatio < 1.5 ? '#f59e0b' : '#ef4444';
+    const cpcTarget = ensureTargetRange(benchmarks.cpc, '$', 'CPC');
+    const cpcVerdictType = deriveVerdict(benchmarks.cpc.value, cpcTarget, 'lower-is-better');
+    const cpcBarData = calculateBarData(benchmarks.cpc.value, cpcTarget, benchmarks.cpc.median, 'lower-is-better', '$', 'CPC');
+    const cpcVerdictLabels = { outside_target: "Outside Target", on_target: "On Target", exceeds_target: "Excellent", unknown: "Benchmark" };
+    const cpcVerdictIcons = { outside_target: "⚠️", on_target: "🎯", exceeds_target: "🎉", unknown: "📊" };
 
     cpcVerdict.innerHTML = `
-        <h4>Cost Per Click (CPC) Analysis</h4>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
-            <div class="metric-item">
-                <span class="metric-label">Your CPC</span>
-                <span class="metric-value">${formatCurrency(results.derived?.cpc)}</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Market Median</span>
-                <span class="metric-value">${formatCurrency(results.benchmarks?.medians?.cpc)}</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Performance</span>
-                <span class="metric-value" style="color:${cpcColor};">${cpcPerformance}</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">vs Market</span>
-                <span class="metric-value" style="color:${cpcColor};">${((cpcRatio - 1) * 100).toFixed(0)}%</span>
-            </div>
+        <div style="font-size:14px; font-weight:600; color:#6b7280; margin-bottom:12px;">
+            ${cpcVerdictIcons[cpcVerdictType] || "📊"} ${cpcVerdictLabels[cpcVerdictType] || "Benchmark"}
         </div>
+        <div style="font-size:20px; font-weight:700; margin-bottom:8px;">Your CPC is ${fmtMoney(benchmarks.cpc.value)}</div>
+        <div style="font-size:13px; color:#6b7280; margin-bottom:16px;">
+            Target range: ${fmtMoney(cpcTarget.low)}–${fmtMoney(cpcTarget.high)}
+        </div>
+        ${generateBar(cpcBarData)}
     `;
 
-    // CR Verdict
+    // CR Verdict with Bar
     const crVerdict = document.getElementById('cr-verdict-container');
-    const crPercent = (results.derived?.cr * 100).toFixed(2);
-    const crPerformance = results.derived?.cr > 0.08 ? 'Excellent' :
-                         results.derived?.cr > 0.05 ? 'Good' :
-                         results.derived?.cr > 0.03 ? 'Average' : 'Needs Improvement';
-    const crColor = results.derived?.cr > 0.08 ? '#10b981' :
-                   results.derived?.cr > 0.05 ? '#3b82f6' :
-                   results.derived?.cr > 0.03 ? '#f59e0b' : '#ef4444';
+    const crTarget = ensureTargetRange(benchmarks.cr, '%', 'CR');
+    const crVerdictType = deriveVerdict(benchmarks.cr.value, crTarget, 'higher-is-better');
+    const crBarData = calculateBarData(benchmarks.cr.value, crTarget, benchmarks.cr.median, 'higher-is-better', '%', 'CR');
+    const crVerdictLabels = { outside_target: "Outside Target", on_target: "On Target", exceeds_target: "Excellent", unknown: "Benchmark" };
+    const crVerdictIcons = { outside_target: "⚠️", on_target: "🎯", exceeds_target: "🎉", unknown: "📊" };
 
     crVerdict.innerHTML = `
-        <h4>Conversion Rate (CR) Analysis</h4>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
-            <div class="metric-item">
-                <span class="metric-label">Your CR</span>
-                <span class="metric-value">${crPercent}%</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Clicks</span>
-                <span class="metric-value">${results.input?.clicks || 0}</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Leads</span>
-                <span class="metric-value">${results.input?.leads || 0}</span>
-            </div>
-            <div class="metric-item">
-                <span class="metric-label">Performance</span>
-                <span class="metric-value" style="color:${crColor};">${crPerformance}</span>
-            </div>
+        <div style="font-size:14px; font-weight:600; color:#6b7280; margin-bottom:12px;">
+            ${crVerdictIcons[crVerdictType] || "📊"} ${crVerdictLabels[crVerdictType] || "Benchmark"}
         </div>
+        <div style="font-size:20px; font-weight:700; margin-bottom:8px;">Your CR is ${fmtPct1(benchmarks.cr.value)}</div>
+        <div style="font-size:13px; color:#6b7280; margin-bottom:16px;">
+            Target range: ${fmtPct1(crTarget.low)}–${fmtPct1(crTarget.high)}
+        </div>
+        ${generateBar(crBarData)}
     `;
 
     // Diagnosis Card
     const diagnosisCard = document.getElementById('diagnosisCard');
     const primaryAction = results.diagnosis?.primary || 'optimize';
-    const actionEmoji = primaryAction === 'scale' ? '📈' :
-                       primaryAction === 'optimize' ? '🔧' : '📊';
+    const actionEmoji = primaryAction === 'scale' ? '📈' : primaryAction === 'optimize' ? '🔧' : '📊';
     const actionText = primaryAction === 'scale' ? 'This campaign is performing well and ready to scale' :
                       primaryAction === 'optimize' ? 'This campaign needs optimization to improve performance' :
                       'Continue monitoring this campaign';
@@ -463,12 +556,12 @@ function displayBenchmarkResults(results) {
             <h5 style="margin:0 0 12px 0;">Campaign Summary</h5>
             <div style="display:grid;gap:8px;">
                 <div><strong>Category:</strong> ${results.input?.category} → ${results.input?.subcategory}</div>
-                <div><strong>Budget:</strong> ${formatCurrency(results.input?.budget)}</div>
+                <div><strong>Budget:</strong> ${fmtMoney(results.input?.budget)}</div>
                 <div><strong>Total Clicks:</strong> ${results.input?.clicks}</div>
                 <div><strong>Total Leads:</strong> ${results.input?.leads}</div>
-                <div><strong>Goal CPL:</strong> ${formatCurrency(results.input?.goal_cpl)}</div>
-                <div><strong>Actual CPL:</strong> ${formatCurrency(results.derived?.cpl)}</div>
-                <div><strong>Market Median CPL:</strong> ${formatCurrency(results.benchmarks?.medians?.cpl)}</div>
+                <div><strong>Goal CPL:</strong> ${fmtMoney(results.input?.goal_cpl)}</div>
+                <div><strong>Actual CPL:</strong> ${fmtMoney(results.derived?.cpl)}</div>
+                <div><strong>Market Median CPL:</strong> ${fmtMoney(results.benchmarks?.medians?.cpl)}</div>
             </div>
         </div>
     `;
@@ -480,10 +573,10 @@ function displayBenchmarkResults(results) {
         copyBtn.onclick = () => {
             const summary = `Campaign Analysis - ${results.input?.category}/${results.input?.subcategory}\n` +
                           `Goal Status: ${goalStatusText}\n` +
-                          `Your CPL: ${formatCurrency(results.derived?.cpl)} (Goal: ${formatCurrency(results.input?.goal_cpl)})\n` +
-                          `Market Median: ${formatCurrency(results.benchmarks?.medians?.cpl)}\n` +
+                          `Your CPL: ${fmtMoney(results.derived?.cpl)} (Goal: ${fmtMoney(results.input?.goal_cpl)})\n` +
+                          `Market Median: ${fmtMoney(results.benchmarks?.medians?.cpl)}\n` +
                           `Recommendation: ${primaryAction.toUpperCase()}\n` +
-                          `Budget: ${formatCurrency(results.input?.budget)} | Clicks: ${results.input?.clicks} | Leads: ${results.input?.leads}`;
+                          `Budget: ${fmtMoney(results.input?.budget)} | Clicks: ${results.input?.clicks} | Leads: ${results.input?.leads}`;
             navigator.clipboard.writeText(summary);
             showNotification('Summary copied to clipboard!', 'success');
         };
