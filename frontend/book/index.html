@@ -35,8 +35,8 @@ p{margin:0 0 var(--space-4)}
 .subtext{color:var(--gray-500); font-size:var(--text-sm)}
 
 header.header{
-  padding:16px 40px; border-bottom:1px solid var(--gray-200); background:rgba(255,255,255,.9);
-  backdrop-filter:blur(10px); box-shadow:0 2px 8px rgba(0,0,0,.08); position:sticky; top:0; z-index:10;
+  padding:16px 40px; border-bottom:1px solid var(--gray-200); background:rgba(255,255,255,0.9);
+  backdrop-filter:blur(10px); box-shadow:0 2px 8px rgba(0,0,0,0.08); position:sticky; top:0; z-index:10;
 }
 .header-content{display:flex; justify-content:space-between; align-items:center; max-width:1400px; margin:0 auto;}
 .brand-section{display:flex; flex-direction:column;}
@@ -367,8 +367,9 @@ header.header{
 document.addEventListener('DOMContentLoaded', () => {
   // ===== API bases =====
   const API_BASES = [
-    window.location.origin,     // Current page origin (localhost:8000)
-    'http://localhost:8000',    // Explicit local development server
+    'http://localhost:8003',    // Working unified-northlight server
+    window.location.origin,     // Current page origin
+    'http://localhost:8000',    // Fallback local server
     'https://northlight-wsgw.onrender.com',
     'https://northlight-api-dev.onrender.com',
   ];
@@ -410,6 +411,32 @@ document.addEventListener('DOMContentLoaded', () => {
   const fmtPct = (v) => v == null ? '—' : `${v}%`;
   const fmtMoney0 = (x) => (x == null || isNaN(x)) ? '—' : '$' + Math.round(Number(x)).toLocaleString('en-US');
 
+  // Format leads performance vs expected
+  const formatLeadsPerformance = (actual, expected) => {
+    if (!expected || expected <= 0) {
+      return '<span class="metric-context">(Expected: —)</span>';
+    }
+
+    const actualNum = Number(actual) || 0;
+    const expectedNum = Number(expected);
+    const performancePct = ((actualNum / expectedNum) - 1) * 100;
+    const roundedExpected = Math.round(expectedNum);
+
+    let trendClass, trendText;
+    if (performancePct >= 25) {
+      trendClass = 'trend-down'; // Good performance (more leads than expected)
+      trendText = `↑${Math.round(performancePct)}%`;
+    } else if (performancePct <= -25) {
+      trendClass = 'trend-up'; // Poor performance (significantly fewer leads)
+      trendText = `↓${Math.round(Math.abs(performancePct))}%`;
+    } else {
+      trendClass = 'trend-neutral'; // On track
+      trendText = performancePct > 0 ? `↑${Math.round(performancePct)}%` : performancePct < 0 ? `↓${Math.round(Math.abs(performancePct))}%` : '→';
+    }
+
+    return `<span class="metric-trend ${trendClass}">${trendText}</span><span class="metric-context">(Expected: ${roundedExpected})</span>`;
+  };
+
   // ===== API =====
   async function fetchFromAny(path, params = {}) {
     const qs = new URLSearchParams(params).toString();
@@ -431,13 +458,15 @@ document.addEventListener('DOMContentLoaded', () => {
       displayDataFreshness(metadata);
     } catch (e) {
       console.warn('Could not fetch data freshness:', e);
-      // Silently fail - don't show indicator if we can't get the data
+      // Show fallback message if API fails
+      displayFallbackFreshness();
     }
   }
 
   function displayDataFreshness(metadata) {
     if (!metadata || metadata.error) {
-      return; // Don't show anything if there's an error
+      displayFallbackFreshness();
+      return;
     }
 
     const { data_snapshot_date, last_modified_display, record_count, file_name } = metadata;
@@ -459,7 +488,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Show the indicator
       el.dataFreshness.style.display = 'block';
+    } else {
+      displayFallbackFreshness();
     }
+  }
+
+  function displayFallbackFreshness() {
+    el.freshnessDate.textContent = 'Unknown';
+    el.dataFreshness.title = 'Unable to fetch data freshness information';
+    el.dataFreshness.style.display = 'block';
   }
   async function fetchData(params = {}) {
     const [summary, accountsResponse] = await Promise.all([
@@ -537,6 +574,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (status === 'safe') {
         return { text: acc.headline_diagnosis || 'Performing Well', sev: 'safe' };
     }
+    // Check for zero-lead flags FIRST (highest priority)
+    if (acc.zero_lead_emerging === true || acc.zero_lead_severe === true) {
+        return { text: 'ZERO LEADS — NO CONVERSIONS', sev: 'critical' };
+    }
+    // Fall back to headline diagnosis or primary issue
     const text = acc.headline_diagnosis || acc.primary_issue || 'Monitoring';
     const sev = status === 'critical' ? 'critical' : (status === 'warning' ? 'warning' : 'neutral');
     return { text, sev };
@@ -589,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return `
       <div class="section-title">Churn Risk Breakdown</div>
       <section class="card-section" id="risk-breakdown">
-        <div id="churn-waterfall"></div>
+        <div class="churn-waterfall"></div>
       </section>`;
   }
 
@@ -712,14 +754,48 @@ document.addEventListener('DOMContentLoaded', () => {
         return d > 0 ? {txt:`↑${d}%`, cls: up} : d < 0 ? {txt:`↓${Math.abs(d)}%`, cls: down} : {txt:'→', cls:'trend-neutral'};
     }
     const tCpl = trend(cplDeltaPct);
-    const pacingText = (util==null) ? '—' : (util<0.75 ? 'Under' : (util>1.25 ? 'Over' : 'On track'));
+    // Enhanced pacing display function
+    const formatPacingPerformance = (utilization) => {
+      if (utilization == null || utilization === 0) {
+        return '<span class="metric-context">(No pacing data)</span>';
+      }
+
+      const util = Number(utilization);
+      const pacingPct = Math.round(util * 100);
+
+      let trendClass, trendText, contextText;
+      if (util < 0.5) {
+        trendClass = 'trend-up'; // Red - severely under-paced
+        trendText = `↓${Math.round((1 - util) * 100)}%`;
+        contextText = 'Severely Under';
+      } else if (util < 0.75) {
+        trendClass = 'trend-up'; // Red - under-paced
+        trendText = `↓${Math.round((1 - util) * 100)}%`;
+        contextText = 'Under-paced';
+      } else if (util > 1.5) {
+        trendClass = 'trend-up'; // Red - severely over-paced
+        trendText = `↑${Math.round((util - 1) * 100)}%`;
+        contextText = 'Severely Over';
+      } else if (util > 1.25) {
+        trendClass = 'trend-up'; // Red - over-paced
+        trendText = `↑${Math.round((util - 1) * 100)}%`;
+        contextText = 'Over-paced';
+      } else {
+        trendClass = 'trend-down'; // Green - on track
+        const variance = Math.abs(util - 1) * 100;
+        trendText = variance < 5 ? '→' : util > 1 ? `↑${Math.round(variance)}%` : `↓${Math.round(variance)}%`;
+        contextText = 'On Track';
+      }
+
+      return `<span class="metric-trend ${trendClass}">${trendText}</span><span class="metric-context">(${contextText})</span>`;
+    };
 
     return `
       <div class="section-title">Key Metrics</div>
       <div class="metrics-bar">
         <div class="metric-item"><span class="metric-label">CPL:</span><span class="metric-value">${cpl!=null?fmtMoney0(cpl):'—'}</span><span class="metric-trend ${tCpl.cls}">${tCpl.txt}</span><span class="metric-context">${goalContext}</span></div>
-        <div class="metric-item"><span class="metric-label">Leads:</span><span class="metric-value">${leads}</span><span class="metric-context">(Expected: ${expTdPlan!=null?Math.round(expTdPlan):'—'})</span></div>
-        <div class="metric-item"><span class="metric-label">Pacing:</span><span class="metric-value">${util!=null? Math.round(util*100)+'%':'—'}</span><span class="metric-context">${pacingText}</span></div>
+        <div class="metric-item"><span class="metric-label">Leads:</span><span class="metric-value">${leads}</span>${formatLeadsPerformance(leads, expTdPlan)}</div>
+        <div class="metric-item"><span class="metric-label">Pacing:</span><span class="metric-value">${util!=null? Math.round(util*100)+'%':'—'}</span>${formatPacingPerformance(util)}</div>
         <div class="metric-item"><span class="metric-label">Spent:</span><span class="metric-value">${fmtMoney0(spent)}</span><span class="metric-context">/ ${fmtMoney0(budg)}</span></div>
         <div class="metric-item"><span class="metric-label">Account Age:</span><span class="metric-value">${renderAge(acc).main}</span><span class="metric-context" style="color:var(--gray-500);">${renderAge(acc).detail}</span></div>
       </div>`;
@@ -810,7 +886,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     return `
-      <div class="priority-card ${status}">
+      <div class="priority-card ${status}" data-cid="${acc.campaign_id || ''}">
         <div class="card-header" role="button" tabindex="0" aria-expanded="false">
           <div class="card-main-row">
             <div class="churn-display">
@@ -926,6 +1002,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ===== Filtering =====
+  // Debounce utility to prevent rapid API calls
+  function debounce(fn, ms) {
+    let timeout;
+    return function(...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
+
   async function handleFilterChange(){
     const params = {};
     const raw = {
@@ -945,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const { summary, accounts } = await fetchData(params);
       renderSummary(summary);
       state.accounts = accounts || [];
-      updateTotalBudgetFromAccounts(state.accounts);
+      // REMOVED: updateTotalBudgetFromAccounts(state.accounts); - API provides correct budget_at_risk
       renderCards(state.accounts, true);
     }catch(err){
       console.error('Filter fetch failed:', err);
@@ -996,10 +1081,11 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSummary(summary);
       populateFilters(summary.facets || {});
       state.accounts = accounts || [];
-      updateTotalBudgetFromAccounts(state.accounts);
+      // REMOVED: updateTotalBudgetFromAccounts(state.accounts); - API provides correct budget_at_risk
       renderCards(state.accounts, true);
+      const handleFilterChangeDebounced = debounce(handleFilterChange, 300);
       [el.viewFilter, el.optimizerFilter, el.partnerFilter, el.advertiserFilter, el.amFilter, el.gmFilter]
-        .forEach(dd => dd && dd.addEventListener('change', handleFilterChange));
+        .forEach(dd => dd && dd.addEventListener('change', handleFilterChangeDebounced));
 
       // Special handler for partner filter to load advertisers
       el.partnerFilter.addEventListener('change', handlePartnerChange);
