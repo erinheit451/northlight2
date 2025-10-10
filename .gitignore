@@ -1,3 +1,20 @@
 secrets/
 nul
 archive/
+
+# Data files - keep local only
+data/raw/
+data/book/
+backend/data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/*.log
+*.log.*
+
+# Environment
+.env
