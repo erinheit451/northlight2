@@ -58,7 +58,7 @@ async def get_summary(
         total_accounts = len(campaigns)
 
         # Priority counts
-        p1_critical = sum(1 for c in campaigns if c.priority_tier == "P1 - CRITICAL")
+        p1_critical = sum(1 for c in campaigns if c.priority_tier == "P1 - URGENT")
         p2_high = sum(1 for c in campaigns if c.priority_tier == "P2 - HIGH")
 
         # Budget at risk calculation
@@ -71,7 +71,7 @@ async def get_summary(
         if budget_at_risk == 0:
             budget_at_risk = sum(
                 float(c.campaign_budget or 0) for c in campaigns
-                if c.priority_tier in ["P1 - CRITICAL", "P2 - HIGH"] and c.campaign_budget
+                if c.priority_tier in ["P1 - URGENT", "P2 - HIGH"] and c.campaign_budget
             )
 
         # Get facet data for filters
@@ -80,27 +80,23 @@ async def get_summary(
         optimizers = sorted(set(c.optimizer for c in campaigns if c.optimizer))
         gms = sorted(set(c.gm for c in campaigns if c.gm))
 
-        # Get data freshness from the DMS Ultimate source table
+        # Get data freshness from the book.campaigns table
         latest_extracted = None
         latest_snapshot_date = None
         try:
-            # Query the source DMS Ultimate table directly for the extraction timestamp
-            dms_query = """
-            SELECT MAX(extracted_at) as latest_extraction
-            FROM heartbeat_core.ultimate_dms_campaigns
-            """
-            result = await db.execute(text(dms_query))
-            extraction_time = result.scalar()
-            if extraction_time:
-                latest_extracted = extraction_time
-                latest_snapshot_date = latest_extracted.strftime("%b %d")
-        except Exception as e:
-            logger.warning(f"Could not get DMS extraction timestamp: {e}")
-            # Fallback to campaign created_at if DMS query fails
+            # Use the max updated_at from book.campaigns table as the data freshness indicator
             if campaigns:
-                extracted_times = [c.created_at for c in campaigns if c.created_at]
-                if extracted_times:
-                    latest_extracted = max(extracted_times)
+                updated_times = [c.updated_at for c in campaigns if c.updated_at]
+                if updated_times:
+                    latest_extracted = max(updated_times)
+                    latest_snapshot_date = latest_extracted.strftime("%b %d")
+        except Exception as e:
+            logger.warning(f"Could not get campaign updated timestamp: {e}")
+            # Fallback to created_at
+            if campaigns:
+                created_times = [c.created_at for c in campaigns if c.created_at]
+                if created_times:
+                    latest_extracted = max(created_times)
                     latest_snapshot_date = latest_extracted.strftime("%b %d")
 
         return {
@@ -437,46 +433,18 @@ async def get_partner_advertisers(
 async def get_metadata(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     """Get metadata about the current dataset including data freshness information."""
     try:
-        # Get data freshness from the DMS Ultimate source table
-        dms_query = """
-        SELECT MAX(extracted_at) as latest_extraction,
-               COUNT(*) as record_count
-        FROM heartbeat_core.ultimate_dms_campaigns
-        """
-        result = await db.execute(text(dms_query))
-        row = result.fetchone()
-
-        if row and row[0]:  # row[0] is latest_extraction
-            extraction_time = row[0]
-            record_count = row[1]
-
-            # Format the date for the UI
-            data_snapshot_date = extraction_time.strftime("%Y-%m-%d")
-            last_modified_display = extraction_time.strftime("%Y-%m-%d %H:%M:%S")
-
-            return {
-                "data_snapshot_date": data_snapshot_date,
-                "last_modified": extraction_time.isoformat(),
-                "last_modified_display": last_modified_display,
-                "file_name": "DMS Ultimate Database Extract",
-                "file_size_bytes": 0,
-                "record_count": record_count,
-                "available_snapshots": [],
-                "is_current": True
-            }
-
-        # If no DMS data, fall back to campaign data
-        campaign_query = select(func.count(Campaign.id), func.max(Campaign.created_at)).select_from(Campaign)
+        # Get data freshness from book.campaigns table (primary source)
+        campaign_query = select(func.count(Campaign.id), func.max(Campaign.updated_at)).select_from(Campaign)
         result = await db.execute(campaign_query)
-        count, latest_created = result.fetchone()
+        count, latest_updated = result.fetchone()
 
-        if latest_created:
-            data_snapshot_date = latest_created.strftime("%Y-%m-%d")
-            last_modified_display = latest_created.strftime("%Y-%m-%d %H:%M:%S")
+        if latest_updated:
+            data_snapshot_date = latest_updated.strftime("%Y-%m-%d")
+            last_modified_display = latest_updated.strftime("%Y-%m-%d %H:%M:%S")
 
             return {
                 "data_snapshot_date": data_snapshot_date,
-                "last_modified": latest_created.isoformat(),
+                "last_modified": latest_updated.isoformat(),
                 "last_modified_display": last_modified_display,
                 "file_name": "Campaign Database",
                 "file_size_bytes": 0,
