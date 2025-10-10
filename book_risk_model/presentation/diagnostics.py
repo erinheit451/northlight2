@@ -10,6 +10,25 @@ from ..constants import *
 from ..utils import nz_num, safe_div
 
 
+def _compute_true_days(row: pd.Series) -> float:
+    """
+    Compute true campaign age in days using the same formula as the frontend.
+
+    Formula: (io_cycle - 1) × avg_cycle_length + days_elapsed
+
+    This ensures consistent age calculation across the UI and diagnostic pills.
+    Defaults to AVG_CYCLE (30.4) for cycle length if not provided.
+    """
+    io_cycle = float(row.get('io_cycle') or 0)
+    days_elapsed = float(row.get('days_elapsed') or 0)
+    avg_cycle_length = float(row.get('avg_cycle_length') or AVG_CYCLE)
+
+    if io_cycle > 0:
+        total_days = ((io_cycle - 1) * avg_cycle_length) + days_elapsed
+        return max(total_days, days_elapsed)
+    return days_elapsed
+
+
 def _goal_advice_for_row(row: pd.Series) -> dict:
     """
     Return a compact, UI-ready advisory about CPL goal realism.
@@ -169,16 +188,33 @@ def generate_headline_diagnosis(df) -> Tuple[List[str], List[str]]:
                 severities.append('neutral')
                 continue
 
-        # Critical conditions
-        if (cpl_pct > 300) and (io <= 3) and (leads <= 5):
-            headlines.append('CPL CRISIS — NEW ACCOUNT — LOW LEADS')
+        # Critical conditions - PRIORITIZE PERFORMANCE OVER ACCOUNT AGE
+        if cpl_pct > 300:
+            if io <= 3 and leads <= 5:
+                headlines.append('CPL CRISIS — NEW ACCOUNT — LOW LEADS')
+            else:
+                headlines.append(f"CPL CRISIS — ${int(row.get('running_cid_cpl') or 0)} vs ${int(row.get('effective_cpl_goal') or row.get('cpl_goal') or 0)} GOAL")
+            severities.append('critical')
+            continue
+        if cpl_pct > 200:
+            headlines.append(f"SEVERE CPL CRISIS — ${int(row.get('running_cid_cpl') or 0)} vs ${int(row.get('effective_cpl_goal') or row.get('cpl_goal') or 0)} GOAL")
             severities.append('critical')
             continue
         if cpl_pct > 100:
             headlines.append(f"HIGH CPL — ${int(row.get('running_cid_cpl') or 0)} vs ${int(row.get('effective_cpl_goal') or row.get('cpl_goal') or 0)} GOAL")
-            severities.append('warning' if cpl_pct <= 200 else 'critical')
+            severities.append('warning')
             continue
-        if io <= 3:
+
+        # NEW ACCOUNT AT RISK - use advertiser lifetime (MAID-level) instead of io_cycle
+        # This shows if the ADVERTISER is truly new (<90 days), not just the current campaign cycle
+        advertiser_age_days = row.get('advertiser_lifetime_days')
+        if pd.notna(advertiser_age_days) and advertiser_age_days < 90:
+            # Truly new advertiser with <90 days of historical data
+            headlines.append('NEW ACCOUNT AT RISK')
+            severities.append('warning')
+            continue
+        elif not pd.notna(advertiser_age_days) and io <= 3:
+            # Fallback to io_cycle if advertiser_lifetime_days not available
             headlines.append('NEW ACCOUNT AT RISK')
             severities.append('warning')
             continue
@@ -241,10 +277,36 @@ def generate_diagnosis_pills(row) -> List[Dict[str, str]]:
         pct = int(row['cpl_variance_pct'])
         pills.append({'text': f'CPL {("+" if pct>0 else "")}{pct}%', 'type': 'critical' if pct > 200 else 'warning'})
 
-    # Early tenure
-    tm = float(row.get('true_months_running') or 0)
-    if tm <= 3.0:
+    # Early Account pill - ADVERTISER is "early" if total MAID lifetime < 90 days
+    # This uses MAID-level historical data, not just current campaign cycle
+    cid = row.get('campaign_id', 'unknown')
+    advertiser_lifetime_days = row.get('advertiser_lifetime_days')
+
+    # Fallback to campaign-level age if advertiser lifetime not available
+    true_days = row.get('true_days_running')
+    if true_days is None or not pd.notna(true_days):
+        true_days = _compute_true_days(row)
+
+    # Determine which age to use for "Early Account" pill
+    if pd.notna(advertiser_lifetime_days):
+        # Use advertiser lifetime (MAID-level) - this is the TRUE account age
+        age_for_pill = advertiser_lifetime_days
+        age_type = "advertiser"
+        print(f"[DEBUG] Campaign {cid}: Using advertiser_lifetime_days={age_for_pill:.1f} (campaign cycle age={true_days:.1f})")
+    else:
+        # Fallback to campaign cycle age if MAID data not available
+        age_for_pill = true_days
+        age_type = "campaign"
+        print(f"[DEBUG] Campaign {cid}: Using campaign cycle age={age_for_pill:.1f} (no advertiser data)")
+
+    # Show "Early Account" pill if advertiser is genuinely under 90 days old
+    if pd.notna(age_for_pill) and age_for_pill < 90:
+        print(f"[DEBUG] Campaign {cid}: ADDING Early Account pill ({age_type} age={age_for_pill:.1f} < 90)")
         pills.append({'text': 'Early Account', 'type': 'warning'})
+    else:
+        if pd.notna(age_for_pill):
+            print(f"[DEBUG] Campaign {cid}: NOT adding Early Account pill ({age_type} age={age_for_pill:.1f} >= 90)")
+
 
     # Single product
     if row.get('single_product_flag') or row.get('true_product_count') == 1:

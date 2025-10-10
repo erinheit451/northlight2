@@ -1,12 +1,17 @@
 // frontend/book/risk_waterfall.js
+let waterfallIdCounter = 0;
+
 export function renderChurnWaterfall(root, cfg) {
   if (!root || !cfg) return;
   const cap = (n) => Math.max(0, Math.min(cfg.cap_to ?? 100, Number(n) || 0));
   const totalTarget = cap(cfg.total_pct ?? 0);
 
+  // Generate unique tooltip ID for each waterfall instance
+  const tooltipId = `wf-tip-${++waterfallIdCounter}`;
+
   root.classList.add('nl-waterfall');
-  root.innerHTML = `<div class="nl-tooltip" id="wf-tip"></div>`;
-  const tip = root.querySelector('#wf-tip');
+  root.innerHTML = `<div class="nl-tooltip" id="${tooltipId}"></div>`;
+  const tip = root.querySelector(`#${tooltipId}`);
 
   const row = (label) => {
     const wrap = document.createElement('div');

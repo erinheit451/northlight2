@@ -9,20 +9,27 @@ SEL_LOGIN_PASSWORD = 'input[name="px"]'
 SEL_LOGIN_SUBMIT = 'input[name="commit"]'
 
 # Report + Export
-ULTIMATE_DMS_URL = (
-    "https://corp.reachlocal.com/reports/run.php?db_node=maindb&db_type=unified"
-    "&link_id=7524&favorite_id=18690&favorite_title=Ultimate%20DMS%20Campaign%20Performance%20Report%20-%20Partner"
-    "&reportmenu=1&Channel=Partner&td_last_active=on&td_Channel=on&td_business_name2=on&td_idbusiness=on"
-    "&td_advertiser_name=on&td_primary_user_name=on&td_AM=on&td_AM_Manager=on&td_Optimizer1_Manager=on&td_Optimizer1=on"
-    "&td_Optimizer2_Manager=on&td_Optimizer2=on&td_MAID=on&td_MCID_clicks=on&td_MCID_leads=on&td_MCID=on&td_campaign_name=on"
-    "&td_idcampaign=on&td_product=on&td_offer_name=on&td_finance_product=on&td_tracking_method_name=on&td_All_Reviews_P30=on"
-    "&td_IO_Cycle=on&td_Avg_Cycle_Length=on&td_RunningCID_Leads=on&td_amount_Spent=on&td_days_elapsed=on&td_Utilization=on"
-    "&td_Campaign_Performance_Rating=on&td_BC=on&td_BSC=on&td_campaign_budget=on&td_Budget_10=on&td_Budget_25=on"
-    "&td_Budget_Average=on&td_Budget_75=on&td_Budget_90=on&td_CPL_Agreed=on&td_CID_CPL=on&td_CPL_MCID=on"
-    "&td_CPL_Last15_Days=on&td_CPL_15_to_30Days=on&td_CPL_30_to_60Days=on&td_CPLead_10=on&td_CPLead_25=on"
-    "&td_CPLead_Average=on&td_CPLead_75=on&td_CPLead_90=on&td_MCID_Avg_CPC=on&td_CPClick_10=on"
-    "&td_CPClick_25=on&td_CPClick_Average=on&td_CPClick_75=on&td_CPClick_90=on"
-)
+def get_ultimate_dms_url():
+    """Generate Ultimate DMS URL with current date for Last Active filter."""
+    from datetime import datetime
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    return (
+        "https://corp.reachlocal.com/reports/run.php?db_node=maindb&db_type=unified"
+        "&link_id=7524&favorite_id=18690&favorite_title=Ultimate%20DMS%20Campaign%20Performance%20Report%20-%20Partner"
+        f"&reportmenu=1&Channel=Partner&last_active={current_date}&td_last_active=on&td_Channel=on&td_business_name2=on&td_idbusiness=on"
+        "&td_advertiser_name=on&td_primary_user_name=on&td_AM=on&td_AM_Manager=on&td_Optimizer1_Manager=on&td_Optimizer1=on"
+        "&td_Optimizer2_Manager=on&td_Optimizer2=on&td_MAID=on&td_MCID_clicks=on&td_MCID_leads=on&td_MCID=on&td_campaign_name=on"
+        "&td_idcampaign=on&td_product=on&td_offer_name=on&td_finance_product=on&td_tracking_method_name=on&td_All_Reviews_P30=on"
+        "&td_IO_Cycle=on&td_Avg_Cycle_Length=on&td_RunningCID_Leads=on&td_amount_Spent=on&td_days_elapsed=on&td_Utilization=on"
+        "&td_Campaign_Performance_Rating=on&td_BC=on&td_BSC=on&td_campaign_budget=on&td_Budget_10=on&td_Budget_25=on"
+        "&td_Budget_Average=on&td_Budget_75=on&td_Budget_90=on&td_CPL_Agreed=on&td_CID_CPL=on&td_CPL_MCID=on"
+        "&td_CPL_Last15_Days=on&td_CPL_15_to_30Days=on&td_CPL_30_to_60Days=on&td_CPLead_10=on&td_CPLead_25=on"
+        "&td_CPLead_Average=on&td_CPLead_75=on&td_CPLead_90=on&td_MCID_Avg_CPC=on&td_CPClick_10=on"
+        "&td_CPClick_25=on&td_CPClick_Average=on&td_CPClick_75=on&td_CPClick_90=on"
+    )
+
+# Legacy constant for backwards compatibility
+ULTIMATE_DMS_URL = get_ultimate_dms_url()
 
 # You said the export element looks like: <a href="run.php?...&everything=1&excel_version=1">Export</a>
 # We'll locate it by href substring or link text.

@@ -263,6 +263,61 @@ def correct_gm_assignments_from_performance_data(df: pd.DataFrame, perf_data: di
     return df
 
 
+def assign_partner_from_bid_name(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Extract partner name from BID Name field for campaigns where partner is still Unknown.
+    BID Name often contains the partner/agency name (e.g., 'SalemSurround', 'CreekmoreMarketing, LLCInvoice').
+    """
+    # Partner name mappings to clean up BID names
+    bid_name_mappings = {
+        'SalemSurround': 'Salem Surround',
+        'CreekmoreMarketing, LLCInvoice': 'Creekmore Marketing',
+        'CreekmoreMarketing': 'Creekmore Marketing',
+        'enCOMPASSAgency': 'EnCOMPASS Agency',
+        'Five19': 'FiveNineteen',
+        'BokkaGroup': 'Bokka Group',
+        'DigitalTulipInvoice': 'Digital Tulip',
+        'BoltMarketing': 'Bolt Marketing',
+        'CentralStatesMarketing': 'Central States Media',
+        'BFMGroupInc. Invoice': 'BFM Group Inc',
+        'BahakelDigital': 'Bahakel Digital',
+        'CreativelyDisruptive': 'Creatively Disruptive',
+        'MarketHardware/SociusMarketing': 'Socius Marketing',
+        'LocaliQ': 'LocaliQ',
+    }
+
+    unknown_count_before = (df['partner_name'] == 'Unknown').sum()
+
+    for idx, row in df.iterrows():
+        if row.get('partner_name') == 'Unknown' or row.get('partner_name') == 'TBD':
+            bid_name = str(row.get('bid_name', '')).strip()
+
+            if bid_name and bid_name != '' and bid_name != 'nan':
+                # Check for exact matches first
+                if bid_name in bid_name_mappings:
+                    df.at[idx, 'partner_name'] = bid_name_mappings[bid_name]
+                # Check for partial matches (e.g., "SalemSurround - LSACampaigns")
+                elif any(key in bid_name for key in bid_name_mappings.keys()):
+                    for key, value in bid_name_mappings.items():
+                        if key in bid_name:
+                            df.at[idx, 'partner_name'] = value
+                            break
+                else:
+                    # Use bid_name directly if it's not empty and looks like a partner name
+                    # (starts with capital letter and is > 3 chars)
+                    if len(bid_name) > 3 and bid_name[0].isupper():
+                        df.at[idx, 'partner_name'] = bid_name
+
+    unknown_count_after = (df['partner_name'] == 'Unknown').sum()
+    mapped_count = unknown_count_before - unknown_count_after
+
+    if mapped_count > 0:
+        print(f"Mapped {mapped_count} partners from BID Name field")
+        print(f"Remaining Unknown partners: {unknown_count_after}")
+
+    return df
+
+
 def assign_partner_by_gm_and_data_raw(gm: str, advertiser_name: str, area: str) -> str:
     """
     Assign partner based on GM assignment and available data.
@@ -535,7 +590,7 @@ async def enrich_with_performance_metrics(df: pd.DataFrame, conn) -> pd.DataFram
             report_month,
             cobrand as business_name,
             area
-        FROM book.raw_heartbeat_spend_revenue_performance_current
+        FROM heartbeat_etl.spend_revenue_performance_current
         WHERE campaign_id::text = ANY($1)
             AND cost_per_lead IS NOT NULL
         ORDER BY campaign_id, report_month DESC
@@ -615,6 +670,9 @@ async def enrich_with_performance_metrics(df: pd.DataFrame, conn) -> pd.DataFram
         df['partner_name'] = 'Unknown'
         print("Warning: No performance data available - partners set to 'Unknown'")
 
+    # Fallback: Use BID Name to extract partner for campaigns still marked as Unknown
+    df = assign_partner_from_bid_name(df)
+
     return df
 
 
@@ -676,6 +734,7 @@ async def load_health_data() -> pd.DataFrame:
 
         FROM heartbeat_core.ultimate_dms_campaigns
         WHERE campaign_id IS NOT NULL
+        AND snapshot_date = (SELECT MAX(snapshot_date) FROM heartbeat_core.ultimate_dms_campaigns WHERE snapshot_date IS NOT NULL)
         ORDER BY campaign_id
         """
 
@@ -756,6 +815,26 @@ async def load_health_data() -> pd.DataFrame:
 
             # Calculate advertiser lifetime (MAID-level historical data)
             df = await calculate_advertiser_lifetime(df, conn)
+
+            # ===== DEBUG: Check Sano Heating data =====
+            debug_cid = '5022443'
+            debug_row = df[df['campaign_id'] == debug_cid]
+            if not debug_row.empty:
+                r = debug_row.iloc[0]
+                print(f"\n{'='*60}")
+                print(f"DEBUG: Sano Heating (CID {debug_cid}) - RAW DATABASE VALUES")
+                print(f"{'='*60}")
+                print(f"amount_spent: ${r.get('amount_spent', 'NULL')}")
+                print(f"campaign_budget: ${r.get('campaign_budget', 'NULL')}")
+                print(f"days_elapsed: {r.get('days_elapsed', 'NULL')} days")
+                print(f"avg_cycle_length: {r.get('avg_cycle_length', 'NULL')} days")
+                print(f"io_cycle: {r.get('io_cycle', 'NULL')}")
+                print(f"running_cid_leads: {r.get('running_cid_leads', 'NULL')}")
+                print(f"running_cid_cpl: ${r.get('running_cid_cpl', 'NULL')}")
+                print(f"utilization (from DB): {r.get('utilization', 'NULL')}")
+                print(f"cpl_goal: ${r.get('cpl_goal', 'NULL')}")
+                print(f"bsc_cpl_avg: ${r.get('bsc_cpl_avg', 'NULL')}")
+                print(f"{'='*60}\n")
 
             # Apply real risk calculations instead of defaults
             df = apply_risk_calculations(df)

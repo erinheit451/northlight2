@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(for script in main.py run_etl_pipeline.py run_all_extractors.py run_complete_etl_sync.py)",
+      "Bash(do echo \"=== $script ===\")",
+      "Bash(awk:*)",
+      "Bash(curl:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python:*)",
+      "Read(//c/Users/Roci/**)",
+      "Bash(while read dir)",
+      "Bash(done)",
+      "Bash(git reset:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

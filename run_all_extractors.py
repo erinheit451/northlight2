@@ -79,20 +79,21 @@ def run_extractor_subprocess(module_path: str, timeout: int = 300) -> tuple[bool
 
 def run_corp_portal_extractors():
     """Run all Corporate Portal extractors."""
+    # Define extractors with custom timeouts for heavy reports
     extractors = [
-        ("Ultimate DMS", "extractors.corp_portal.ultimate_dms"),
-        ("Budget Waterfall Client", "extractors.corp_portal.budget_waterfall_client"),
-        ("Spend Revenue Performance", "extractors.corp_portal.spend_revenue_performance"),
-        ("DFP-RIJ", "extractors.corp_portal.dfp_rij"),
-        ("Agreed CPL Performance", "extractors.corp_portal.agreed_cpl_performance"),
-        ("BSC Standards", "extractors.corp_portal.bsc_standards"),
-        ("Budget Waterfall Channel", "extractors.corp_portal.budget_waterfall_channel"),
+        ("Ultimate DMS", "extractors.corp_portal.ultimate_dms", 300),
+        ("Budget Waterfall Client", "extractors.corp_portal.budget_waterfall_client", 300),
+        ("Spend Revenue Performance", "extractors.corp_portal.spend_revenue_performance", 600),  # Increased for 40+ dimension query
+        ("DFP-RIJ", "extractors.corp_portal.dfp_rij", 300),
+        ("Agreed CPL Performance", "extractors.corp_portal.agreed_cpl_performance", 300),
+        ("BSC Standards", "extractors.corp_portal.bsc_standards", 300),
+        ("Budget Waterfall Channel", "extractors.corp_portal.budget_waterfall_channel", 300),
     ]
 
     results = {}
-    for name, module in extractors:
+    for name, module, timeout in extractors:
         log_step("CORP_PORTAL", f"=== Starting {name} ===")
-        success, info = run_extractor_subprocess(module, timeout=300)
+        success, info = run_extractor_subprocess(module, timeout=timeout)
         results[name] = {"success": success, "info": info}
 
         if success:
@@ -105,7 +106,11 @@ def run_corp_portal_extractors():
 
 
 def run_salesforce_extractors():
-    """Run all Salesforce extractors with MFA handling (direct execution for interactive MFA)."""
+    """Run all Salesforce extractors with MFA handling (direct execution for interactive MFA).
+
+    Uses sync execution pattern from Heartbeat to ensure MFA prompts work correctly.
+    These extractors use sync Playwright API and must run in synchronous context.
+    """
     # Check if we should skip due to lockout
     from extractors.salesforce.auth_enhanced import should_skip_sf
 
@@ -118,10 +123,12 @@ def run_salesforce_extractors():
         }
 
     # Run Salesforce extractors directly (not subprocess) to allow interactive MFA
+    # These use sync Playwright API (like Heartbeat) - called directly in main process
     extractors = [
-        ("SF Partner Pipeline", lambda: _run_sf_partner_pipeline()),
-        ("SF Tim King Pipeline", lambda: _run_sf_tim_king_pipeline()),
-        ("SF Partner Calls", lambda: _run_sf_partner_calls()),
+        ("SF Partner Pipeline", _run_sf_partner_pipeline),
+        ("SF Tim King Pipeline", _run_sf_tim_king_pipeline),
+        ("SF Partner Calls", _run_sf_partner_calls),
+        ("SF Grader Opportunities", _run_sf_grader_opportunities),
     ]
 
     results = {}
@@ -150,38 +157,88 @@ def run_salesforce_extractors():
 
     return results
 
-def _run_sf_partner_pipeline():
-    """Run SF Partner Pipeline extractor directly."""
+
+def _run_sf_grader_opportunities():
+    """Run SF Grader Opportunities extractor - RUNS IN MAIN PROCESS to allow MFA input."""
     try:
-        from extractors.salesforce.partner_pipeline import export_partner_pipeline
-        return export_partner_pipeline()
+        print("[DEBUG] Running SF Grader Opportunities (interactive mode for MFA)...")
+        from extractors.salesforce import grader_opportunities
+
+        # Run directly in main process to enable interactive MFA
+        # Note: Function is called export_grader_opportunities(), not run()
+        grader_opportunities.export_grader_opportunities()
+
+        print("[DEBUG] SF Grader Opportunities completed successfully")
+        return True
+    except Exception as e:
+        print(f"[ERROR] SF Grader Opportunities failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def _run_sf_partner_pipeline():
+    """Run SF Partner Pipeline extractor - uses sync Playwright (like Heartbeat)."""
+    try:
+        print("[DEBUG] Running SF Partner Pipeline (interactive mode for MFA)...")
+        from extractors.salesforce import partner_pipeline
+
+        # Import and run the sync function (like Heartbeat does)
+        # This function uses sync Playwright API
+        result = partner_pipeline.run()
+
+        if result:
+            print("[DEBUG] SF Partner Pipeline completed successfully")
+            return True
+        else:
+            print("[ERROR] SF Partner Pipeline returned False")
+            return False
     except Exception as e:
         print(f"[ERROR] SF Partner Pipeline failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def _run_sf_tim_king_pipeline():
-    """Run SF Tim King Pipeline extractor directly."""
+    """Run SF Tim King Pipeline extractor - RUNS IN MAIN PROCESS to allow MFA input."""
     try:
-        from extractors.salesforce.tim_king_partner_pipeline import export_tim_king_partner_pipeline
-        return export_tim_king_partner_pipeline()
+        print("[DEBUG] Running SF Tim King Pipeline (interactive mode for MFA)...")
+        from extractors.salesforce import tim_king_partner_pipeline
+
+        # Run directly in main process to enable interactive MFA
+        success = tim_king_partner_pipeline.run()
+
+        if success:
+            print("[DEBUG] SF Tim King Pipeline completed successfully")
+            return True
+        else:
+            print("[ERROR] SF Tim King Pipeline failed")
+            return False
     except Exception as e:
         print(f"[ERROR] SF Tim King Pipeline failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def _run_sf_partner_calls():
-    """Run SF Partner Calls extractor in subprocess to avoid asyncio conflicts."""
+    """Run SF Partner Calls extractor - RUNS IN MAIN PROCESS to allow MFA input."""
     try:
-        # This extractor has persistent asyncio conflicts, so run it in subprocess like corp portal
-        print("[DEBUG] Running SF Partner Calls in subprocess to avoid asyncio conflicts...")
-        success, info = run_extractor_subprocess("extractors.salesforce.partner_calls", timeout=300)
+        print("[DEBUG] Running SF Partner Calls (interactive mode for MFA)...")
+        from extractors.salesforce import partner_calls
+
+        # Run directly in main process to enable interactive MFA
+        success = partner_calls.run()
+
         if success:
-            print("[DEBUG] SF Partner Calls subprocess completed successfully")
+            print("[DEBUG] SF Partner Calls completed successfully")
             return True
         else:
-            print(f"[ERROR] SF Partner Calls subprocess failed: {info.get('error', 'Unknown error')}")
+            print("[ERROR] SF Partner Calls failed")
             return False
     except Exception as e:
         print(f"[ERROR] SF Partner Calls failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 

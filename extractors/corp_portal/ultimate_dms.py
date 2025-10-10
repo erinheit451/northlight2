@@ -10,7 +10,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent))
 from ..playwright_bootstrap import new_persistent_browser_context
 from .auth import ensure_logged_in
-from .portal_selectors import ULTIMATE_DMS_URL, RUN_REPORT_SELECTORS, RESULTS_READY_MARKERS
+from .portal_selectors import get_ultimate_dms_url, RUN_REPORT_SELECTORS, RESULTS_READY_MARKERS
 
 load_dotenv(dotenv_path=".env")
 
@@ -55,8 +55,10 @@ def run():
         ensure_logged_in(page)
         print("[DEBUG] Authentication completed, navigating to report...")
 
-        # 2) Navigate to report
-        page.goto(ULTIMATE_DMS_URL, wait_until="domcontentloaded")
+        # 2) Navigate to report with current date
+        ultimate_dms_url = get_ultimate_dms_url()
+        print(f"[DEBUG] Navigating to Ultimate DMS URL: {ultimate_dms_url}")
+        page.goto(ultimate_dms_url, wait_until="domcontentloaded")
         try:
             page.wait_for_load_state("networkidle", timeout=30_000)
         except:

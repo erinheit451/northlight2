@@ -208,4 +208,14 @@ def compute_priority_v2(df: pd.DataFrame) -> pd.Series:
     )
     s[p2] = 'P2 - HIGH'
 
+    # Apply FLARE-based top 12% override - use existing flare_score column if available
+    flare_scores = df.get('flare_score')
+    if flare_scores is not None:
+        flare_scores = pd.to_numeric(flare_scores, errors='coerce').fillna(0.0)
+        top_12_percent_threshold = flare_scores.quantile(0.88)  # Top 12% threshold
+        is_top12_flare = flare_scores >= top_12_percent_threshold
+
+        # Override priority for top 12% FLARE scores (except P0 SAFE)
+        s[is_top12_flare & (~is_safe)] = 'P1 - URGENT'
+
     return s

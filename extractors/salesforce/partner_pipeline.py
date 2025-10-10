@@ -79,25 +79,23 @@ def _get_sid(page) -> str:
             return c.get("value")
     raise RuntimeError("No Salesforce session cookie (sid) found.")
 
-def _classic_origin(page) -> str:
-    """
-    Use *.my.salesforce.com for Classic servlet, even if current page is on *.lightning.force.com.
-    Prefer a cookie domain that ends with '.my.salesforce.com'; fall back to mapping the current host.
-    """
-    # 1) Try cookie domains
-    for c in page.context.cookies():
-        dom = (c.get("domain") or "").lstrip(".")
-        if dom.endswith(".my.salesforce.com"):
-            return f"https://{dom}"
-    # 2) Map the current URL
-    host = urlparse(page.url).hostname or ""
-    if host.endswith(".lightning.force.com"):
-        mapped = host.replace(".lightning.force.com", ".my.salesforce.com")
-        return f"https://{mapped}"
-    # 3) Fallback: if current host already my.salesforce.com or my domain
-    if host.endswith(".my.salesforce.com"):
-        return f"https://{host}"
-    raise RuntimeError(f"Cannot determine Classic origin from host '{host}'")
+def _classic_origin(lightning_url: str) -> str:
+    """Convert Lightning URL to Classic domain format."""
+    parsed = urlparse(lightning_url)
+
+    # Map Lightning domains to Classic domains
+    if 'lightning.force.com' in parsed.netloc:
+        # sso.lightning.force.com -> sso.my.salesforce.com
+        classic_domain = parsed.netloc.replace('lightning.force.com', 'my.salesforce.com')
+        return f"{parsed.scheme}://{classic_domain}"
+
+    # For other domains, try removing 'lightning.' prefix
+    if parsed.netloc.startswith('lightning.'):
+        classic_domain = parsed.netloc.replace('lightning.', '', 1)
+        return f"{parsed.scheme}://{classic_domain}"
+
+    # Default: use as-is
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 def _rest_fetch_report_json(page, report_id: str) -> Dict[str, Any]:
     """Robust REST API fetch with automatic report execution fallback."""
@@ -250,18 +248,45 @@ def _ensure_bytes_are_csv_or_raise(b: bytes):
         raise RuntimeError("Body looks like HTML, not CSV.")
 
 def _export_via_classic_csv(page, report_id: str, target_csv: str):
-    """
-    Fallback: Classic export servlet returns CSV inline (not attachment JSON/HTML).
-    """
-    origin = _classic_origin(page)
-    url = f"{origin}/servlet/servlet.ReportExport?reportId={report_id}&export=1&enc=UTF-8&xf=csv"
-    resp = page.request.get(url, headers={"Authorization": f"Bearer {_get_sid(page)}"}, timeout=60_000)
-    body = resp.body()
-    if resp.status != 200:
-        raise RuntimeError(f"Classic export HTTP {resp.status}: {resp.text()[:500]}")
-    # Guard: reject HTML/JSON masquerading as CSV
-    _ensure_bytes_are_csv_or_raise(body)
-    return _safe_save_bytes(target_csv, body)
+    """Export report using Classic CSV servlet endpoint."""
+    print(f"[DEBUG] Attempting Classic CSV export for report {report_id}")
+
+    current_url = page.url
+    origin = _classic_origin(current_url)
+
+    # Classic CSV export URL - simpler format
+    csv_url = f"{origin}/{report_id}?isdtp=p1&export=1&enc=UTF-8&xf=csv"
+    print(f"[DEBUG] Classic CSV URL: {csv_url}")
+
+    try:
+        # Use request fetch instead of navigation
+        resp = page.request.get(
+            csv_url,
+            headers={"Accept": "text/csv"},
+            timeout=60000
+        )
+        if resp.status != 200:
+            raise RuntimeError(f"CSV export request failed with status {resp.status}")
+
+        content_bytes = resp.body()
+        if not content_bytes:
+            raise RuntimeError("No content received from CSV export")
+
+        # Guard: reject HTML/JSON masquerading as CSV
+        _ensure_bytes_are_csv_or_raise(content_bytes)
+
+        saved_path = _safe_save_bytes(target_csv, content_bytes)
+
+        # Sanity check: count actual CSV rows
+        with open(saved_path, "rb") as f:
+            n_rows = sum(1 for _ in f) - 1  # minus header
+        print(f"[OK] Classic CSV export successful: {max(n_rows,0)} CSV rows ({len(content_bytes)} bytes)")
+
+        return saved_path
+
+    except Exception as e:
+        print(f"[DEBUG] Classic CSV export failed: {e}")
+        raise
 
 def _dump_error_context(page, error_type):
     """

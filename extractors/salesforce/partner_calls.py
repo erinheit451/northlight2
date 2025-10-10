@@ -479,6 +479,7 @@ def export_partner_calls():
         except Exception as e_ui:
             print(f"[ERROR] UI export failed after {time.time() - ui_start:.2f}s: {e_ui}")
             print(f"[ERROR] Total extraction time: {time.time() - start_time:.2f}s")
+            _dump_error_context(page, "all_export_methods_failed")
             raise RuntimeError("All export methods failed")
 
     except Exception as e:
@@ -487,7 +488,7 @@ def export_partner_calls():
         print(f"[DEBUG] Current page URL: {page.url}")
         print(f"[DEBUG] Page title: {page.title()}")
         _dump_error_context(page, "general_error")
-        return False
+        raise  # Re-raise exception instead of returning False
     finally:
         try:
             page.close()

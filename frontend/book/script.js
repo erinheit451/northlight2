@@ -1,17 +1,20 @@
 // frontend/book/script.js
 import { renderChurnWaterfall } from '/frontend/book/risk_waterfall.js';
 
-// Store account data for waterfall rendering
+// Store account data for waterfall rendering with O(1) lookup
 let accountsData = [];
+let accountsByCid = new Map();
 
 // Function to store accounts data when it's loaded
 function storeAccountsData(accounts) {
   accountsData = accounts || [];
+  // Build index for O(1) lookups
+  accountsByCid = new Map(accounts.map(acc => [acc.campaign_id, acc]));
 }
 
-// Function to get account data by CID
+// Function to get account data by CID - O(1) lookup
 function getAccountByCid(cid) {
-  return accountsData.find(acc => acc.campaign_id === cid);
+  return accountsByCid.get(cid);
 }
 
 // Convert account data to waterfall config
@@ -37,7 +40,7 @@ function buildWaterfallFromAccount(account) {
     }
   }
 
-  if (!drivers || !drivers.baseline) {
+  if (!drivers || drivers.baseline == null) {
     console.log('No drivers or baseline found');
     return null;
   }
@@ -130,6 +133,9 @@ function estimateLiftRatio(driverName, impactPp) {
 }
 
 // Function to detect when cards are expanded and render waterfalls
+// Use WeakSet to track rendered waterfalls and prevent duplicate renders
+const renderedWaterfalls = new WeakSet();
+
 function setupWaterfallObserver() {
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
@@ -137,14 +143,14 @@ function setupWaterfallObserver() {
         const target = mutation.target;
         if (target.classList.contains('card-expanded') && target.classList.contains('show')) {
           // Card was expanded, check for waterfall mount point
-          const mount = target.querySelector('#churn-waterfall');
-          if (mount && !mount.hasChildNodes()) {
-            // Get the campaign ID from the card
+          const mount = target.querySelector('.churn-waterfall');
+          if (mount && !renderedWaterfalls.has(mount)) {
+            // Get the campaign ID from the data attribute
             const card = target.closest('.priority-card');
             if (card) {
-              const cidElement = card.querySelector('.detail-item strong');
-              const cid = cidElement ? cidElement.textContent.trim() : null;
-              if (cid && cid !== 'N/A') {
+              const cid = card.dataset.cid;
+              if (cid && cid !== 'N/A' && cid !== '') {
+                renderedWaterfalls.add(mount);
                 renderWaterfallForCid(cid, mount);
               }
             }

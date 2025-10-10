@@ -43,7 +43,8 @@ class UnifiedDataLoader:
                 "file_pattern": "ultimate_dms_*.csv",
                 "table": "heartbeat_core.ultimate_dms_campaigns",
                 "unique_key": ["campaign_id", "snapshot_date"],
-                "encoding_issues": True
+                "encoding_issues": True,
+                "date_column": "last_active"
             },
             "budget_waterfall_client": {
                 "file_pattern": "budget_waterfall_client_*.csv",
@@ -84,7 +85,7 @@ class UnifiedDataLoader:
             "dfp_rij": {
                 "file_pattern": "dfp_rij_*.csv",
                 "table": "heartbeat_core.dfp_rij_alerts",
-                "unique_key": ["business_id", "alert_type", "created_date"],
+                "unique_key": [],
                 "encoding_issues": True
             },
             "agreed_cpl_performance": {
@@ -97,11 +98,18 @@ class UnifiedDataLoader:
                 "file_pattern": "spend_revenue_*.csv",
                 "table": "heartbeat_performance.spend_revenue_performance",
                 "unique_key": ["maid", "campaign_id", "performance_period_start", "performance_period_end"],
+                "encoding_issues": True,
+                "date_column": "report_month"
+            },
+            "bsc_standards": {
+                "file_pattern": "bsc_standards_*.csv",
+                "table": "heartbeat_core.bsc_standards",
+                "unique_key": ["country", "category", "sub_category", "vertical", "snapshot_date"],
                 "encoding_issues": True
             }
         }
 
-    def clean_unicode_text(self, text: str) -> str:
+    def clean_unicode_text(self, text: str, is_column_name: bool = False) -> str:
         """Clean Unicode text with extra spaces and special characters."""
         if pd.isna(text) or text is None:
             return ""
@@ -113,10 +121,16 @@ class UnifiedDataLoader:
         text = text.replace('\ufeff', '')  # BOM
         text = text.replace('\u0000', '')  # Null characters
 
-        # Clean up extra spaces between characters (common in our files)
-        text = re.sub(r'(\w)\s+(\w)', r'\1\2', text)
-        text = re.sub(r'\s+', ' ', text)  # Multiple spaces to single
-        text = text.strip()
+        # For column names, preserve spaces to convert to underscores later
+        if is_column_name:
+            # Just remove extra whitespace, don't collapse spaces between words
+            text = re.sub(r'\s+', ' ', text)  # Multiple spaces to single
+            text = text.strip()
+        else:
+            # Clean up extra spaces between characters (common in our files)
+            text = re.sub(r'(\w)\s+(\w)', r'\1\2', text)
+            text = re.sub(r'\s+', ' ', text)  # Multiple spaces to single
+            text = text.strip()
 
         return text
 
@@ -133,10 +147,12 @@ class UnifiedDataLoader:
             for encoding in encodings_to_try:
                 try:
                     self.logger.info(f"Trying encoding {encoding} for {file_path.name}")
-                    df = pd.read_csv(file_path, encoding=encoding, sep='\t' if encoding.startswith('utf-16') else ',')
+                    # Use tab separator for UTF-16 files from Corporate Portal
+                    separator = '\t' if encoding.startswith('utf-16') else ','
+                    df = pd.read_csv(file_path, encoding=encoding, sep=separator, skipinitialspace=True)
 
-                    # Clean column names
-                    df.columns = [self.clean_unicode_text(col) for col in df.columns]
+                    # Clean column names - handle UTF-16 wide character issues
+                    df.columns = [self.clean_unicode_text(col, is_column_name=True) for col in df.columns]
 
                     # Clean all text data
                     for col in df.select_dtypes(include=['object']).columns:
@@ -174,13 +190,22 @@ class UnifiedDataLoader:
         df.columns = cols
 
         # General column name standardization
+        # Convert to lowercase first
         df.columns = df.columns.str.lower()
-        df.columns = df.columns.str.replace(' ', '_')
-        df.columns = df.columns.str.replace('-', '_')
-        df.columns = df.columns.str.replace('.', '_')
-        df.columns = df.columns.str.replace('(', '')
-        df.columns = df.columns.str.replace(')', '')
-        df.columns = df.columns.str.replace('%', '_pct')
+
+        # Remove parentheses and their content first (before replacing spaces)
+        # This handles cases like "From SOD (Start of Day)" -> "from sod"
+        df.columns = df.columns.str.replace(r'\s*\([^)]*\)', '', regex=True)
+
+        # Replace spaces and special characters with underscores
+        df.columns = df.columns.str.replace(' ', '_', regex=False)
+        df.columns = df.columns.str.replace('-', '_', regex=False)
+        df.columns = df.columns.str.replace('.', '_', regex=False)
+        df.columns = df.columns.str.replace('%', '_pct', regex=False)
+
+        # Clean up any multiple underscores or trailing/leading underscores
+        df.columns = df.columns.str.replace('__+', '_', regex=True)
+        df.columns = df.columns.str.strip('_')
 
         # Source-specific column mappings
         column_mappings = {
@@ -217,7 +242,68 @@ class UnifiedDataLoader:
                 "campaign_performance_rating": "campaign_performance_rating",
                 "bc": "bc",
                 "bsc": "bsc",
-                "campaign_budget": "campaign_budget"
+                "campaign_budget": "campaign_budget",
+                "bsc_budget_bottom_10_pct": "bsc_budget_bottom_10_pct",
+                "bsc_budget_bottom_25_pct": "bsc_budget_bottom_25_pct",
+                "bsc_budget_average": "bsc_budget_average",
+                "bsc_budget_top_25_pct": "bsc_budget_top_25_pct",
+                "bsc_budget_top_10_pct": "bsc_budget_top_10_pct",
+                "cpl_goal": "cpl_goal",
+                "running_cid_cpl": "running_cid_cpl",
+                "cpl_mcid": "cpl_mcid",
+                "cpl_last_15_days": "cpl_last_15_days",
+                "cpl_15_to_30_days": "cpl_15_to_30_days",
+                "bsc_cpl_top_10_pct": "bsc_cpl_top_10_pct",
+                "bsc_cpl_top_25_pct": "bsc_cpl_top_25_pct",
+                "bsc_cpl_avg": "bsc_cpl_avg",
+                "bsc_cpl_bottom_25_pct": "bsc_cpl_bottom_25_pct",
+                "bsc_cpl_bottom_10_pct": "bsc_cpl_bottom_10_pct",
+                "mcid_avg_cpc": "mcid_avg_cpc",
+                "bsc_cpc_top_10_pct": "bsc_cpc_top_10_pct",
+                "bsc_cpc_top_25_pct": "bsc_cpc_top_25_pct",
+                "bsc_cpc_average": "bsc_cpc_average",
+                "bsc_cpc_bottom_25_pct": "bsc_cpc_bottom_25_pct",
+                "bsc_cpc_bottom_10_pct": "bsc_cpc_bottom_10_pct"
+            },
+            "spend_revenue_performance": {
+                "report_month": "report_month",
+                "country": "country",
+                "channel": "channel",
+                "cobrand": "cobrand",
+                "area": "area",
+                "office": "office",
+                "account_owner": "account_owner",
+                "bid": "bid",
+                "business_subtype": "business_subtype",
+                "service_tier": "service_tier",
+                "first_aid": "first_aid",
+                "maid": "maid",
+                "aid": "aid",
+                "mcid": "mcid",
+                "campaign_id": "campaign_id",
+                "finance_product": "finance_product",
+                "idoffer": "id_offer",
+                "vertical": "vertical",
+                "business_category": "business_category",
+                "business_sub_category": "business_sub_category",
+                "net_cost": "budget_allocated",
+                "overages": "amount_spent",
+                "spend": "amount_spent",
+                "total_fees": "revenue_generated",
+                "revenue": "revenue_generated",
+                "impressions": "impressions_generated",
+                "clicks": "clicks_generated",
+                "calls": "leads_generated",
+                "emails": "leads_generated",
+                "qualified_web_events": "leads_generated",
+                "leads": "leads_generated",
+                "cost_per_call": "cpl",
+                "cost_per_click": "cpc",
+                "cost_per_lead": "cpl",
+                "cpm": "cpm",
+                "ctr": "roi_pct",
+                "clicks_per_lead": "roas",
+                "currency": "currency"
             },
             "sf_partner_pipeline": {
                 "account_owner": "account_owner",
@@ -237,6 +323,46 @@ class UnifiedDataLoader:
                 "stage_duration": "stage_duration",
                 "cycles": "cycles",
                 "processed_date": "processed_date"
+            },
+            "spend_revenue_performance": {
+                "report_month": "report_month",
+                "country": "country",
+                "channel": "channel",
+                "cobrand": "cobrand",
+                "area": "area",
+                "office": "office",
+                "account_owner": "account_owner",
+                "bid": "bid",
+                "business_subtype": "business_subtype",
+                "service_tier": "service_tier",
+                "first_aid": "first_aid",
+                "maid": "maid",
+                "aid": "aid",
+                "mcid": "mcid",
+                "campaign_id": "campaign_id",
+                "finance_product": "finance_product",
+                "idoffer": "id_offer",
+                "vertical": "vertical",
+                "business_category": "business_category",
+                "business_sub_category": "business_sub_category",
+                "net_cost": "budget_allocated",
+                "overages": "amount_spent",
+                "spend": "amount_spent",
+                "total_fees": "revenue_generated",
+                "revenue": "revenue_generated",
+                "impressions": "impressions_generated",
+                "clicks": "clicks_generated",
+                "calls": "leads_generated",
+                "emails": "leads_generated",
+                "qualified_web_events": "leads_generated",
+                "leads": "leads_generated",
+                "cost_per_call": "cpl",
+                "cost_per_click": "cpc",
+                "cost_per_lead": "cpl",
+                "cpm": "cpm",
+                "ctr": "roi_pct",
+                "clicks_per_lead": "roas",
+                "currency": "currency"
             }
         }
 
@@ -246,11 +372,39 @@ class UnifiedDataLoader:
 
         return df
 
-    def add_metadata_columns(self, df: pd.DataFrame, source_file: str, snapshot_date: str) -> pd.DataFrame:
+    def add_metadata_columns(self, df: pd.DataFrame, source_file: str, snapshot_date: str, data_source: str = None) -> pd.DataFrame:
         """Add metadata columns required by all tables."""
         df = df.copy()
 
-        # Add snapshot date
+        # Handle date columns properly for each data source
+        if data_source == "spend_revenue_performance":
+            # For spend revenue, use report_month for performance periods
+            if 'report_month' in df.columns:
+                try:
+                    # Parse report month and create start/end periods
+                    report_dates = pd.to_datetime(df['report_month'], errors='coerce')
+                    df['performance_period_start'] = report_dates.dt.to_period('M').dt.start_time.dt.date
+                    df['performance_period_end'] = report_dates.dt.to_period('M').dt.end_time.dt.date
+                except:
+                    # Fallback to snapshot date
+                    df['performance_period_start'] = pd.to_datetime(snapshot_date).date()
+                    df['performance_period_end'] = pd.to_datetime(snapshot_date).date()
+            else:
+                df['performance_period_start'] = pd.to_datetime(snapshot_date).date()
+                df['performance_period_end'] = pd.to_datetime(snapshot_date).date()
+
+        elif data_source == "ultimate_dms":
+            # For Ultimate DMS, ensure last_active is a proper date
+            if 'last_active' in df.columns:
+                # Convert last_active to date type
+                df['last_active'] = pd.to_datetime(df['last_active'], errors='coerce').dt.date
+                # If any are null after conversion, use snapshot date
+                df['last_active'] = df['last_active'].fillna(pd.to_datetime(snapshot_date).date())
+            else:
+                # If last_active column doesn't exist, create it with snapshot date
+                df['last_active'] = pd.to_datetime(snapshot_date).date()
+
+        # Add snapshot date (use extraction date)
         df['snapshot_date'] = pd.to_datetime(snapshot_date).date()
 
         # Add extraction timestamp
@@ -269,8 +423,34 @@ class UnifiedDataLoader:
         df = df.replace('', np.nan)
         df = df.replace('NULL', np.nan)
 
+        # Convert TEXT columns (non-numeric, non-date) to string
+        # Identify columns that should be text based on database schema
+        text_pattern_columns = ['name', 'id', 'bid', 'aid', 'mcid', 'maid', 'channel', 'product',
+                               'method', 'rating', 'reviews', 'bc', 'bsc', 'office', 'area',
+                               'owner', 'user', 'am', 'optimizer', 'manager', 'tracking', 'finance']
+
+        for col in df.columns:
+            # Check if column name suggests it should be text
+            should_be_text = any(pattern in col.lower() for pattern in text_pattern_columns)
+            # Also check if it's not a numeric-named column (amount, budget, cpl, cpc, etc.)
+            is_numeric_column = any(num_pat in col.lower() for num_pat in
+                                   ['amount', 'budget', 'tcv', 'cpl', 'cpc', 'leads', 'clicks',
+                                    'duration', 'cycles', 'clients', 'spent', 'revenue', 'impressions',
+                                    'utilization', 'cycle', 'elapsed', 'pct', 'avg', 'count'])
+
+            if should_be_text and not is_numeric_column and 'date' not in col.lower():
+                try:
+                    # Convert to string, preserving None for null values
+                    df[col] = df[col].astype(str)
+                    df[col] = df[col].replace('nan', None)
+                    df[col] = df[col].replace('<NA>', None)
+                    df[col] = df[col].where(df[col].notna(), None)
+                except:
+                    pass
+
         # Convert date columns
-        date_columns = [col for col in df.columns if 'date' in col.lower()]
+        # Include columns with 'date', 'sod', 'eod' in the name
+        date_columns = [col for col in df.columns if any(word in col.lower() for word in ['date', 'sod', 'eod'])]
         for col in date_columns:
             if col in df.columns:
                 try:
@@ -314,11 +494,53 @@ class UnifiedDataLoader:
 
         return df
 
+    async def get_table_columns(self, table_name: str) -> List[str]:
+        """Get list of column names from database table."""
+        try:
+            from sqlalchemy import text
+            async with get_db_session() as session:
+                # Split schema and table name
+                if '.' in table_name:
+                    schema, table = table_name.split('.')
+                else:
+                    schema = 'public'
+                    table = table_name
+
+                # Query information_schema to get column names
+                query = text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = :schema AND table_name = :table
+                    ORDER BY ordinal_position
+                """)
+                result = await session.execute(query, {"schema": schema, "table": table})
+                columns = [row[0] for row in result.fetchall()]
+                return columns
+        except Exception as e:
+            self.logger.warning(f"Could not get columns for {table_name}: {e}")
+            return []
+
     async def load_data_to_table(self, df: pd.DataFrame, table_name: str, unique_key: List[str]) -> Dict[str, Any]:
         """Load dataframe to PostgreSQL table with upsert logic."""
         try:
             from sqlalchemy import text
             async with get_db_session() as session:
+                # Ensure column names are properly formatted before converting to dict
+                df = df.copy()
+                df.columns = [col.replace(' ', '_').lower().strip() for col in df.columns]
+
+                # Get table columns from database to filter out non-existent columns
+                table_columns = await self.get_table_columns(table_name)
+                if table_columns:
+                    # Filter dataframe to only include columns that exist in the table
+                    available_columns = [col for col in df.columns if col in table_columns]
+                    missing_columns = [col for col in df.columns if col not in table_columns]
+
+                    if missing_columns:
+                        self.logger.warning(f"Dropping columns not in {table_name}: {missing_columns}")
+
+                    df = df[available_columns]
+
                 # Convert DataFrame to list of dictionaries
                 records = df.to_dict('records')
 
@@ -411,7 +633,7 @@ class UnifiedDataLoader:
                 snapshot_date = snapshot_date.group(1) if snapshot_date else datetime.now().strftime('%Y-%m-%d')
 
                 # Add metadata columns
-                df = self.add_metadata_columns(df, file_path.name, snapshot_date)
+                df = self.add_metadata_columns(df, file_path.name, snapshot_date, data_source)
 
                 # Load to database
                 load_result = await self.load_data_to_table(
@@ -590,7 +812,7 @@ async def main():
 
                 print("\nFile Results:")
                 for source, file_result in result['file_results'].items():
-                    status = "✓" if file_result['status'] == 'success' else "✗"
+                    status = "[OK]" if file_result['status'] == 'success' else "[FAIL]"
                     rows = file_result.get('rows_processed', 0)
                     print(f"  - {source}: {status} ({rows} rows)")
 

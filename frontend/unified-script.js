@@ -309,7 +309,12 @@ async function runBenchmarkAnalysis() {
 
         if (response.ok) {
             const results = await response.json();
-            displayBenchmarkResults(results);
+            // Use the proper rendering function from benchmark-rendering.js
+            if (typeof renderBenchmarkResults === 'function') {
+                renderBenchmarkResults(results);
+            } else {
+                displayBenchmarkResults(results);
+            }
         } else {
             const error = await response.json();
             showNotification(error.detail || 'Analysis failed', 'error');

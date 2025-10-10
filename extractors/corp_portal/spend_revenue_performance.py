@@ -16,14 +16,15 @@ load_dotenv(dotenv_path=".env")
 
 # Spend, Revenue & Performance Over Time Report URL - Partner Custom Report
 def get_spend_revenue_url():
-    """Generate Spend Revenue URL with current month dates using provided configuration."""
+    """Generate Spend Revenue URL with current date using provided configuration."""
     from datetime import datetime
+    current_date = datetime.now().strftime("%Y-%m-%d")
     current_month = datetime.now().strftime("%Y-%m-01")
 
     return (
         "https://corp.reachlocal.com/reports/run.php?db_node=maindb&db_type=unified"
         f"&link_id=6615&favorite_id=18757&favorite_title=Spend%2C%20Revenue%20%26%20Performance%20Over%20Time%20-%20Custom"
-        f"&reportmenu=1&Start_Month={current_month}&End_Month={current_month}"
+        f"&reportmenu=1&Start_Month={current_month}&End_Month={current_date}"
         "&td_Report_month=on&td_country=on&td_channel=on&td_coBrand_name=on&td_area_name=on"
         "&td_office_name=on&td_account_owner=on&td_idbusiness=on&td_BusinessSubType_Name=on"
         "&td_Service_Tier=on&td_FAID=on&td_MAID=on&td_idadvertiser=on&td_MCID=on"
@@ -63,8 +64,9 @@ def _wait_results_ready(page) -> bool:
     return False
 
 def _set_current_month_dates(page):
-    """Set Start_Month and End_Month to current month if selectors are found."""
+    """Set Start_Month and End_Month to current date if selectors are found."""
     from datetime import datetime
+    current_date = datetime.now().strftime("%Y-%m-%d")
     current_month = datetime.now().strftime("%Y-%m-01")
 
     try:
@@ -96,8 +98,8 @@ def _set_current_month_dates(page):
             try:
                 end_select = page.locator(selector).first
                 if end_select.is_visible(timeout=2000):
-                    end_select.select_option(value=current_month)
-                    print(f"[DEBUG] Set End_Month to {current_month}")
+                    end_select.select_option(value=current_date)
+                    print(f"[DEBUG] Set End_Month to {current_date}")
                     break
             except:
                 continue
