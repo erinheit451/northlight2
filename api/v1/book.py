@@ -61,18 +61,11 @@ async def get_summary(
         p1_critical = sum(1 for c in campaigns if c.priority_tier == "P1 - URGENT")
         p2_high = sum(1 for c in campaigns if c.priority_tier == "P2 - HIGH")
 
-        # Budget at risk calculation
-        budget_at_risk = sum(
-            float(c.revenue_at_risk or 0) for c in campaigns
-            if c.revenue_at_risk
+        # Total monthly budget calculation (sum of all campaign budgets)
+        total_monthly_budget = sum(
+            float(c.campaign_budget or 0) for c in campaigns
+            if c.campaign_budget
         )
-
-        # If no revenue_at_risk data, fall back to campaign budgets for critical/high priority
-        if budget_at_risk == 0:
-            budget_at_risk = sum(
-                float(c.campaign_budget or 0) for c in campaigns
-                if c.priority_tier in ["P1 - URGENT", "P2 - HIGH"] and c.campaign_budget
-            )
 
         # Get facet data for filters
         partners = sorted(set(c.partner_name for c in campaigns if c.partner_name))
@@ -105,7 +98,7 @@ async def get_summary(
                 "p1_critical": p1_critical,
                 "p2_high": p2_high,
             },
-            "budget_at_risk": budget_at_risk,
+            "budget_at_risk": total_monthly_budget,
             "facets": {
                 "partners": partners,
                 "ams": ams,
