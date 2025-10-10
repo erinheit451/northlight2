@@ -60,6 +60,12 @@ class Campaign(Base):
     true_months_running = Column(Numeric(4, 2))
     cycle_label = Column(String(100))
 
+    # Advertiser Lifetime (MAID-level historical data)
+    advertiser_lifetime_days = Column(Integer)
+    advertiser_lifetime_months = Column(Numeric(5, 2))
+    advertiser_first_seen = Column(Date)
+    advertiser_latest_data = Column(Date)
+
     # Risk Scores
     age_risk = Column(Numeric(5, 2))
     lead_risk = Column(Numeric(5, 2))
@@ -91,6 +97,12 @@ class Campaign(Base):
     headline_diagnosis = Column(Text)
     headline_severity = Column(String(50))
     diagnosis_pills = Column(JSONB)
+
+    # Zero-Lead Flags
+    zero_lead_emerging = Column(Boolean, default=False)
+    zero_lead_severe = Column(Boolean, default=False)
+    high_budget_at_risk = Column(Boolean, default=False)
+    severe_underpacing = Column(Boolean, default=False)
 
     # Account Structure
     campaign_count = Column(Integer)
@@ -138,6 +150,10 @@ class Campaign(Base):
             'true_days_running': self.true_days_running,
             'true_months_running': float(self.true_months_running) if self.true_months_running else None,
             'cycle_label': self.cycle_label,
+            'advertiser_lifetime_days': self.advertiser_lifetime_days,
+            'advertiser_lifetime_months': float(self.advertiser_lifetime_months) if self.advertiser_lifetime_months else None,
+            'advertiser_first_seen': self.advertiser_first_seen.isoformat() if self.advertiser_first_seen else None,
+            'advertiser_latest_data': self.advertiser_latest_data.isoformat() if self.advertiser_latest_data else None,
             'age_risk': float(self.age_risk) if self.age_risk else None,
             'lead_risk': float(self.lead_risk) if self.lead_risk else None,
             'cpl_risk': float(self.cpl_risk) if self.cpl_risk else None,
@@ -160,6 +176,10 @@ class Campaign(Base):
             'headline_diagnosis': self.headline_diagnosis,
             'headline_severity': self.headline_severity,
             'diagnosis_pills': self.diagnosis_pills,
+            'zero_lead_emerging': self.zero_lead_emerging,
+            'zero_lead_severe': self.zero_lead_severe,
+            'high_budget_at_risk': self.high_budget_at_risk,
+            'severe_underpacing': self.severe_underpacing,
             'campaign_count': self.campaign_count,
             'true_product_count': self.true_product_count,
             'is_safe': self.is_safe,

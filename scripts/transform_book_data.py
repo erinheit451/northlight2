@@ -129,6 +129,7 @@ class BookDataTransformer:
 
                         # Risk scores
                         churn_prob_90d=self.safe_decimal(row.get('churn_prob_90d')),
+                        revenue_at_risk=self.safe_decimal(row.get('revenue_at_risk')),
                         flare_score=self.safe_decimal(row.get('flare_score')),
                         priority_index=self.safe_decimal(row.get('priority_index')),
                         priority_tier=str(row.get('priority_tier', 'P3 - MEDIUM')),
@@ -138,6 +139,12 @@ class BookDataTransformer:
                         headline_diagnosis=str(row.get('headline_diagnosis', '')),
                         risk_drivers_json=row.get('risk_drivers_json', {}),
                         diagnosis_pills=row.get('diagnosis_pills', []),
+
+                        # Zero-Lead Flags
+                        zero_lead_emerging=bool(row.get('zero_lead_emerging', False)),
+                        zero_lead_severe=bool(row.get('zero_lead_severe', False)),
+                        high_budget_at_risk=bool(row.get('high_budget_at_risk', False)),
+                        severe_underpacing=bool(row.get('severe_underpacing', False)),
 
                         # Status
                         status='active',
