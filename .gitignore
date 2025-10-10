@@ -12,9 +12,16 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Logs
-logs/*.log
+# Logs - keep local only
+logs/
+*.log
 *.log.*
+
+# Alerts - keep local only
+alerts/
+
+# Claude settings - keep local only
+.claude/
 
 # Environment
 .env

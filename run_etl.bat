@@ -6,7 +6,7 @@ REM Set working directory to script location
 cd /d "%~dp0"
 
 REM Run the ETL pipeline
-python run_etl_pipeline.py
+python scripts/runners/run_etl_pipeline.py
 
 REM Pause to see results (comment out for scheduled tasks)
 pause

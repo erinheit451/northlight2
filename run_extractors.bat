@@ -41,7 +41,7 @@ cd /d "%~dp0"
 
 REM Run the extraction pipeline
 echo Starting extraction pipeline...
-python run_all_extractors.py
+python scripts/runners/run_all_extractors.py
 
 REM Capture exit code
 set EXTRACTION_EXIT_CODE=%errorlevel%

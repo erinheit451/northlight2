@@ -33,7 +33,7 @@ for /f %%i in ('powershell -command "Get-Date -Format 'yyyy-MM-dd'"') do set tod
 
 REM Run the complete ETL pipeline
 echo Starting complete ETL pipeline for date: %today%
-python run_etl_pipeline.py --date %today%
+python scripts/runners/run_etl_pipeline.py --date %today%
 
 REM Capture exit code
 set ETL_EXIT_CODE=%errorlevel%
