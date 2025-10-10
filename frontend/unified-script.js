@@ -5,7 +5,7 @@
 
 // Configuration
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:8001/api/v1'
+    ? 'http://localhost:4000/api/v1'
     : '/api/v1';
 
 const STORAGE_KEY = 'unified_northlight_v1';
@@ -327,19 +327,167 @@ function displayBenchmarkResults(results) {
     const resultsSection = document.getElementById('results');
     resultsSection.style.display = 'block';
 
-    // Display results (simplified version of original Northlight logic)
+    // Primary Status Block
     const primaryStatus = document.getElementById('primaryStatusBlock');
+    const goalStatus = results.overall?.goal_status || 'unknown';
+    const goalStatusText = goalStatus === 'achieved' ? '✅ Goal Achieved' :
+                          goalStatus === 'behind' ? '⚠️ Behind Goal' : 'Unknown';
+    const goalStatusColor = goalStatus === 'achieved' ? '#10b981' :
+                           goalStatus === 'behind' ? '#f59e0b' : '#6b7280';
+
     primaryStatus.innerHTML = `
-        <h4>Analysis Results</h4>
-        <div class="metric-item">
-            <span class="metric-label">Campaign Status</span>
-            <span class="metric-value">${results.overall_status || 'Analyzed'}</span>
+        <h4>Goal CPL Analysis</h4>
+        <div style="padding:16px;background:${goalStatusColor}20;border-left:4px solid ${goalStatusColor};border-radius:8px;margin-bottom:16px;">
+            <div style="font-size:18px;font-weight:600;color:${goalStatusColor};">${goalStatusText}</div>
+            <div style="margin-top:8px;color:#374151;">
+                Your CPL: <strong>${formatCurrency(results.derived?.cpl)}</strong> |
+                Goal CPL: <strong>${formatCurrency(results.input?.goal_cpl)}</strong> |
+                Market Median: <strong>${formatCurrency(results.benchmarks?.medians?.cpl)}</strong>
+            </div>
         </div>
         <div class="metric-item">
             <span class="metric-label">Recommended Action</span>
-            <span class="metric-value">${results.recommendation || 'Review metrics below'}</span>
+            <span class="metric-value" style="text-transform:capitalize;">${results.diagnosis?.primary || 'Review metrics'}</span>
         </div>
     `;
+
+    // CPL Verdict
+    const cplVerdict = document.getElementById('cpl-verdict-container');
+    const cplRatio = results.derived?.cpl / results.benchmarks?.medians?.cpl;
+    const cplPerformance = cplRatio < 0.8 ? 'Excellent (Top Performer)' :
+                          cplRatio < 1.2 ? 'Good (Near Median)' :
+                          cplRatio < 1.5 ? 'Below Average' : 'Poor';
+    const cplColor = cplRatio < 0.8 ? '#10b981' :
+                    cplRatio < 1.2 ? '#3b82f6' :
+                    cplRatio < 1.5 ? '#f59e0b' : '#ef4444';
+
+    cplVerdict.innerHTML = `
+        <h4>Cost Per Lead (CPL) Analysis</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+            <div class="metric-item">
+                <span class="metric-label">Your CPL</span>
+                <span class="metric-value">${formatCurrency(results.derived?.cpl)}</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Market Median</span>
+                <span class="metric-value">${formatCurrency(results.benchmarks?.medians?.cpl)}</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Performance</span>
+                <span class="metric-value" style="color:${cplColor};">${cplPerformance}</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">vs Market</span>
+                <span class="metric-value" style="color:${cplColor};">${((cplRatio - 1) * 100).toFixed(0)}%</span>
+            </div>
+        </div>
+    `;
+
+    // CPC Verdict
+    const cpcVerdict = document.getElementById('cpc-verdict-container');
+    const cpcRatio = results.derived?.cpc / results.benchmarks?.medians?.cpc;
+    const cpcPerformance = cpcRatio < 0.8 ? 'Excellent' :
+                          cpcRatio < 1.2 ? 'Good' :
+                          cpcRatio < 1.5 ? 'Below Average' : 'Poor';
+    const cpcColor = cpcRatio < 0.8 ? '#10b981' :
+                    cpcRatio < 1.2 ? '#3b82f6' :
+                    cpcRatio < 1.5 ? '#f59e0b' : '#ef4444';
+
+    cpcVerdict.innerHTML = `
+        <h4>Cost Per Click (CPC) Analysis</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+            <div class="metric-item">
+                <span class="metric-label">Your CPC</span>
+                <span class="metric-value">${formatCurrency(results.derived?.cpc)}</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Market Median</span>
+                <span class="metric-value">${formatCurrency(results.benchmarks?.medians?.cpc)}</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Performance</span>
+                <span class="metric-value" style="color:${cpcColor};">${cpcPerformance}</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">vs Market</span>
+                <span class="metric-value" style="color:${cpcColor};">${((cpcRatio - 1) * 100).toFixed(0)}%</span>
+            </div>
+        </div>
+    `;
+
+    // CR Verdict
+    const crVerdict = document.getElementById('cr-verdict-container');
+    const crPercent = (results.derived?.cr * 100).toFixed(2);
+    const crPerformance = results.derived?.cr > 0.08 ? 'Excellent' :
+                         results.derived?.cr > 0.05 ? 'Good' :
+                         results.derived?.cr > 0.03 ? 'Average' : 'Needs Improvement';
+    const crColor = results.derived?.cr > 0.08 ? '#10b981' :
+                   results.derived?.cr > 0.05 ? '#3b82f6' :
+                   results.derived?.cr > 0.03 ? '#f59e0b' : '#ef4444';
+
+    crVerdict.innerHTML = `
+        <h4>Conversion Rate (CR) Analysis</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+            <div class="metric-item">
+                <span class="metric-label">Your CR</span>
+                <span class="metric-value">${crPercent}%</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Clicks</span>
+                <span class="metric-value">${results.input?.clicks || 0}</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Leads</span>
+                <span class="metric-value">${results.input?.leads || 0}</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">Performance</span>
+                <span class="metric-value" style="color:${crColor};">${crPerformance}</span>
+            </div>
+        </div>
+    `;
+
+    // Diagnosis Card
+    const diagnosisCard = document.getElementById('diagnosisCard');
+    const primaryAction = results.diagnosis?.primary || 'optimize';
+    const actionEmoji = primaryAction === 'scale' ? '📈' :
+                       primaryAction === 'optimize' ? '🔧' : '📊';
+    const actionText = primaryAction === 'scale' ? 'This campaign is performing well and ready to scale' :
+                      primaryAction === 'optimize' ? 'This campaign needs optimization to improve performance' :
+                      'Continue monitoring this campaign';
+
+    diagnosisCard.innerHTML = `
+        <h4>${actionEmoji} Primary Recommendation: ${primaryAction.toUpperCase()}</h4>
+        <p style="margin:12px 0;color:#374151;">${actionText}</p>
+        <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin-top:16px;">
+            <h5 style="margin:0 0 12px 0;">Campaign Summary</h5>
+            <div style="display:grid;gap:8px;">
+                <div><strong>Category:</strong> ${results.input?.category} → ${results.input?.subcategory}</div>
+                <div><strong>Budget:</strong> ${formatCurrency(results.input?.budget)}</div>
+                <div><strong>Total Clicks:</strong> ${results.input?.clicks}</div>
+                <div><strong>Total Leads:</strong> ${results.input?.leads}</div>
+                <div><strong>Goal CPL:</strong> ${formatCurrency(results.input?.goal_cpl)}</div>
+                <div><strong>Actual CPL:</strong> ${formatCurrency(results.derived?.cpl)}</div>
+                <div><strong>Market Median CPL:</strong> ${formatCurrency(results.benchmarks?.medians?.cpl)}</div>
+            </div>
+        </div>
+    `;
+
+    // Enable copy button
+    const copyBtn = document.getElementById('copySummaryBtn');
+    if (copyBtn) {
+        copyBtn.disabled = false;
+        copyBtn.onclick = () => {
+            const summary = `Campaign Analysis - ${results.input?.category}/${results.input?.subcategory}\n` +
+                          `Goal Status: ${goalStatusText}\n` +
+                          `Your CPL: ${formatCurrency(results.derived?.cpl)} (Goal: ${formatCurrency(results.input?.goal_cpl)})\n` +
+                          `Market Median: ${formatCurrency(results.benchmarks?.medians?.cpl)}\n` +
+                          `Recommendation: ${primaryAction.toUpperCase()}\n` +
+                          `Budget: ${formatCurrency(results.input?.budget)} | Clicks: ${results.input?.clicks} | Leads: ${results.input?.leads}`;
+            navigator.clipboard.writeText(summary);
+            showNotification('Summary copied to clipboard!', 'success');
+        };
+    }
 
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: 'smooth' });
