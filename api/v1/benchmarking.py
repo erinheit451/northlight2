@@ -75,16 +75,16 @@ class BenchmarkService:
         self.db = db
 
     async def get_benchmark_categories(self, limit: int = 2000) -> List[BenchmarkMetadata]:
-        """Get all available benchmark categories."""
+        """Get all available benchmark categories from BSC Standards."""
         try:
             query = """
             SELECT DISTINCT
-                CONCAT(category, '|', subcategory) as key,
+                CONCAT(category, '|', sub_category) as key,
                 category,
-                subcategory
-            FROM northlight_benchmarks.benchmark_categories
-            WHERE active = true
-            ORDER BY category, subcategory
+                sub_category as subcategory
+            FROM heartbeat_core.bsc_standards
+            WHERE country = 'USA'
+            ORDER BY category, sub_category
             LIMIT :limit
             """
 
@@ -105,39 +105,28 @@ class BenchmarkService:
             raise HTTPException(status_code=500, detail="Failed to retrieve benchmark categories")
 
     async def get_benchmark_data(self, category: str, subcategory: str) -> Optional[Dict[str, Any]]:
-        """Get benchmark data for a specific category/subcategory."""
+        """Get benchmark data for a specific category/subcategory from BSC Standards."""
         try:
-            # Get the latest snapshot
-            snapshot_query = """
-            SELECT id FROM northlight_benchmarks.benchmark_snapshots
-            ORDER BY snapshot_date DESC
-            LIMIT 1
-            """
-            snapshot_result = await self.db.execute(text(snapshot_query))
-            snapshot_row = snapshot_result.fetchone()
-
-            if not snapshot_row:
-                return None
-
-            snapshot_id = snapshot_row[0]
-
-            # Get benchmark data
+            # Get benchmark data from BSC Standards
             data_query = """
             SELECT
-                bd.*,
-                bc.category,
-                bc.subcategory
-            FROM northlight_benchmarks.benchmark_data bd
-            JOIN northlight_benchmarks.benchmark_categories bc ON bd.category_id = bc.id
-            WHERE bc.category = :category
-            AND bc.subcategory = :subcategory
-            AND bd.snapshot_id = :snapshot_id
+                category,
+                sub_category,
+                cost_per_lead_median,
+                cost_per_click_median,
+                ctr_median,
+                budget_median,
+                strength
+            FROM heartbeat_core.bsc_standards
+            WHERE category = :category
+            AND sub_category = :subcategory
+            AND country = 'USA'
+            LIMIT 1
             """
 
             result = await self.db.execute(text(data_query), {
                 "category": category,
-                "subcategory": subcategory,
-                "snapshot_id": snapshot_id
+                "subcategory": subcategory
             })
 
             row = result.fetchone()
@@ -145,45 +134,52 @@ class BenchmarkService:
                 return None
 
             # Convert to the format expected by diagnosis logic
+            # BSC only has medians, so we'll use those for all percentiles as approximations
+            cpl_median = float(row[2]) if row[2] else None
+            cpc_median = float(row[3]) if row[3] else None
+            ctr_median = float(row[4]) if row[4] else None
+            budget_median = float(row[5]) if row[5] else None
+
             return {
                 "cpl": {
-                    "median": float(row.cpl_median) if row.cpl_median else None,
+                    "median": cpl_median,
                     "dms": {
-                        "top10": float(row.cpl_top10) if row.cpl_top10 else None,
-                        "top25": float(row.cpl_top25) if row.cpl_top25 else None,
-                        "avg": float(row.cpl_avg) if row.cpl_avg else None,
-                        "bot25": float(row.cpl_bot25) if row.cpl_bot25 else None,
-                        "bot10": float(row.cpl_bot10) if row.cpl_bot10 else None,
+                        "top10": cpl_median * 0.5 if cpl_median else None,  # Approximation
+                        "top25": cpl_median * 0.75 if cpl_median else None,
+                        "avg": cpl_median,
+                        "bot25": cpl_median * 1.25 if cpl_median else None,
+                        "bot10": cpl_median * 1.5 if cpl_median else None,
                     }
                 },
                 "cpc": {
-                    "median": float(row.cpc_median) if row.cpc_median else None,
+                    "median": cpc_median,
                     "dms": {
-                        "top10": float(row.cpc_top10) if row.cpc_top10 else None,
-                        "top25": float(row.cpc_top25) if row.cpc_top25 else None,
-                        "avg": float(row.cpc_avg) if row.cpc_avg else None,
-                        "bot25": float(row.cpc_bot25) if row.cpc_bot25 else None,
-                        "bot10": float(row.cpc_bot10) if row.cpc_bot10 else None,
+                        "top10": cpc_median * 0.5 if cpc_median else None,
+                        "top25": cpc_median * 0.75 if cpc_median else None,
+                        "avg": cpc_median,
+                        "bot25": cpc_median * 1.25 if cpc_median else None,
+                        "bot10": cpc_median * 1.5 if cpc_median else None,
                     }
                 },
                 "ctr": {
-                    "median": float(row.ctr_median) if row.ctr_median else None,
+                    "median": ctr_median,
                 },
                 "budget": {
-                    "median": float(row.budget_median) if row.budget_median else None,
+                    "median": budget_median,
                     "dms": {
-                        "p10_bottom": float(row.budget_p10_bottom) if row.budget_p10_bottom else None,
-                        "p25_bottom": float(row.budget_p25_bottom) if row.budget_p25_bottom else None,
-                        "avg": float(row.budget_avg) if row.budget_avg else None,
-                        "p25_top": float(row.budget_p25_top) if row.budget_p25_top else None,
-                        "p10_top": float(row.budget_p10_top) if row.budget_p10_top else None,
+                        "p10_bottom": budget_median * 0.5 if budget_median else None,
+                        "p25_bottom": budget_median * 0.75 if budget_median else None,
+                        "avg": budget_median,
+                        "p25_top": budget_median * 1.25 if budget_median else None,
+                        "p10_top": budget_median * 1.5 if budget_median else None,
                     }
                 },
                 "meta": {
-                    "category": row.category,
-                    "subcategory": row.subcategory,
-                    "sample_size": row.sample_size,
-                    "confidence_level": float(row.confidence_level) if row.confidence_level else None
+                    "category": row[0],
+                    "subcategory": row[1],
+                    "sample_size": None,  # BSC doesn't provide this
+                    "confidence_level": None,
+                    "strength": row[6]
                 }
             }
 
@@ -234,14 +230,16 @@ class BenchmarkService:
 
 
 # API Endpoints
-@router.get("/meta", response_model=List[BenchmarkMetadata])
+@router.get("/meta")
 async def get_benchmark_metadata(
     limit: int = 2000,
     db: AsyncSession = Depends(get_db)
 ):
     """Get all available benchmark categories and subcategories."""
     service = BenchmarkService(db)
-    return await service.get_benchmark_categories(limit)
+    categories = await service.get_benchmark_categories(limit)
+    # Return in format expected by frontend: {categories: [...]}
+    return {"categories": [cat.dict() for cat in categories]}
 
 
 @router.post("/diagnose", response_model=DiagnoseResponse)
