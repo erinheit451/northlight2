@@ -103,11 +103,13 @@ def _collect_odds_factors_for_row(row) -> list[dict]:
     spend_prog = min(spend / max(ideal_spend_td, 1.0), 2.0)
 
 
-    # CPL factor
-    if cpl_ratio >= 1.2:
+    # CPL factor (requires stable volume; avoids double-count with zero/deficit)
+    # --- FIX B: Gate CPL penalty by lead volume (requires meaningful sample size) ---
+    # Dynamic floor keeps this robust across sizes (>= 5 leads or >= 10% of expected to-date, capped)
+    min_stable_leads = max(5, int(round(exp_td_plan * 0.10)))
+    if leads >= min_stable_leads and cpl_ratio >= 1.2:
         hr = _hr_from_cpl_ratio(cpl_ratio)
         label = _driver_label_for_cpl(cpl_ratio)
-
 
         if label and hr > 1.0:
             factors.append({
@@ -118,7 +120,12 @@ def _collect_odds_factors_for_row(row) -> list[dict]:
 
 
     # Lead deficit factors (using corrected calculations)
-    if exp_td_plan >= 1:
+    # --- FIX A: Block lead-deficit when zero-lead is present (avoid double-counting) ---
+    # Note: zero-lead flags not yet calculated at this point, need to check them inline
+    zero_emerging_check = bool(row.get('zero_lead_emerging', False))
+    zero_last_mo_check = bool(row.get('zero_lead_last_mo', False))
+
+    if not zero_emerging_check and not zero_last_mo_check and exp_td_plan >= 1:
         lead_ratio = min(leads / max(exp_td_plan, 0.1), 10.0)
 
         if lead_ratio <= 0.25 and spend_prog >= 0.5 and days >= 7 and sem_viable:
@@ -134,21 +141,38 @@ def _collect_odds_factors_for_row(row) -> list[dict]:
                 "controllable": True
             })
 
-    # Zero-lead factors
+    # --- FIX C: Choose ONE delivery failure narrative, in severity order ---
+    # Prevent echo-stacking among closely related flags
     zero_emerging = bool(row.get('zero_lead_emerging', False))
     zero_last_mo = bool(row.get('zero_lead_last_mo', False))
+    high_budget_risk = bool(row.get('high_budget_at_risk', False))
+    severe_underpace = bool(row.get('severe_underpacing', False))
 
-    if zero_emerging:
+    if zero_emerging:  # 3.5x, short-horizon acute failure
         factors.append({
             "name": "Zero leads (emerging)",
-            "factor": 1.80,
+            "factor": 3.5,
             "controllable": True
         })
 
-    if zero_last_mo:
+    elif zero_last_mo:  # 2.5x, chronic zero over 30+ days
         factors.append({
             "name": "Zero leads (30+ days)",
-            "factor": 2.5,  # Using _CAL_HR value
+            "factor": 2.5,
+            "controllable": True
+        })
+
+    elif high_budget_risk:  # 1.6x, large unspent + no conversions
+        factors.append({
+            "name": "High budget at risk ($20k+ unspent, zero conversions)",
+            "factor": 1.6,
+            "controllable": True
+        })
+
+    elif severe_underpace:  # 1.5x, spend far below expected pacing
+        factors.append({
+            "name": "Severe underpacing (<50% of expected spend)",
+            "factor": 1.5,
             "controllable": True
         })
 
@@ -465,21 +489,87 @@ def calculate_churn_probability(df: pd.DataFrame) -> pd.DataFrame:
         )
     )
 
+    # --- FIX E: Prevent transitional double-flag - 30d takes precedence over emerging ---
+    # Belt-and-suspenders for transition windows
+
+    # ===== DEBUG: Check zero-lead gates for Sano Heating =====
+    debug_mask = (df['campaign_id'] == '5022443')
+    if debug_mask.any():
+        dr = df[debug_mask].iloc[0]
+        print(f"\n{'='*60}")
+        print(f"DEBUG: Zero-Lead Gates for CID 5022443")
+        print(f"{'='*60}")
+        print(f"\nCalculated values:")
+        print(f"  exp_td_plan: {dr.get('_exp_td_plan', 'NOT CALCULATED')} leads")
+        print(f"  spend_prog: {dr.get('_spend_prog', 'NOT CALCULATED')} ({dr.get('_spend_prog', 0)*100:.1f}%)")
+        print(f"  sem_viable: {dr.get('_sem_viable', 'NOT CALCULATED')}")
+        print(f"  lead_ratio: {dr.get('_lead_ratio', 'NOT CALCULATED')}")
+
+        # Calculate dynamic threshold for debug output
+        sano_cycle_progress = cycle_progress[debug_mask].iloc[0]
+        sano_min_threshold = max(0.15, min(0.5, sano_cycle_progress))
+
+        print(f"\nGate checks (TRUE = passes):")
+        print(f"  [1] leads == 0: {dr.get('running_cid_leads', -1) == 0}")
+        print(f"  [2] days >= {MIN_DAYS_FOR_ALERTS}: {dr.get('days_elapsed', 0) >= MIN_DAYS_FOR_ALERTS}")
+        print(f"  [3] days < 30: {dr.get('days_elapsed', 0) < 30}")
+        print(f"  [4] spend >= ${MIN_SPEND_FOR_ZERO_LEAD}: {dr.get('amount_spent', 0) >= MIN_SPEND_FOR_ZERO_LEAD}")
+        print(f"  [5] exp_td_plan >= {ZERO_LEAD_MIN_EXPECTED_TD}: {dr.get('_exp_td_plan', 0) >= ZERO_LEAD_MIN_EXPECTED_TD}")
+        print(f"  [6] spend_prog >= {sano_min_threshold:.3f} (dynamic: max(0.15, min(0.5, {sano_cycle_progress:.3f}))): {dr.get('_spend_prog', 0) >= sano_min_threshold}")
+        print(f"  [7] sem_viable: {dr.get('_sem_viable', False)}")
+
+        all_gates_pass = (
+            (dr.get('running_cid_leads', -1) == 0) and
+            (dr.get('days_elapsed', 0) >= MIN_DAYS_FOR_ALERTS) and
+            (dr.get('days_elapsed', 0) < 30) and
+            (dr.get('amount_spent', 0) >= MIN_SPEND_FOR_ZERO_LEAD) and
+            (dr.get('_exp_td_plan', 0) >= ZERO_LEAD_MIN_EXPECTED_TD) and
+            (dr.get('_spend_prog', 0) >= sano_min_threshold) and
+            dr.get('_sem_viable', False)
+        )
+        print(f"\nFINAL: zero_lead_emerging should be: {all_gates_pass}")
+        print(f"{'='*60}\n")
+
     # Emerging zero-lead (cycle 5–29d), gated by plan+spend+viability
+    # Dynamic spend progress threshold: max(15%, min(50%, cycle_progress))
+    # This allows early detection for campaigns < 50% through their cycle
+    min_spend_threshold = np.maximum(0.15, np.minimum(0.5, cycle_progress))
+
     df['zero_lead_emerging'] = (
         (leads == 0) &
         (days >= MIN_DAYS_FOR_ALERTS) & (days < 30) &
         (spend >= MIN_SPEND_FOR_ZERO_LEAD) &
         (exp_td_plan >= ZERO_LEAD_MIN_EXPECTED_TD) &
-        (spend_prog >= ZERO_LEAD_MIN_SPEND_PROGRESS) &  # Now spend_prog is in scope
+        (spend_prog >= min_spend_threshold) &  # Dynamic threshold based on cycle progress
         sem_viable
     )
+
+    # --- FIX E: Make zero-lead flags mutually exclusive (30d takes precedence) ---
+    df['zero_lead_emerging'] = df['zero_lead_emerging'] & (~df['zero_lead_last_mo'])
 
     # Idle (paused/near-zero spend) variant: same day floor, not a performance crisis
     df['zero_lead_idle'] = (
         (leads == 0) &
         (days >= MIN_DAYS_FOR_ALERTS) &                 # aligned (was 7)
         (spend < MIN_SPEND_FOR_ZERO_LEAD)
+    )
+
+    # High budget at risk flag
+    # Triggers when: Large unspent budget + no conversions + significant time elapsed
+    df['high_budget_at_risk'] = (
+        ((budget - spend) > 20000) &  # >$20k unspent
+        (leads == 0) &  # No conversions
+        (days >= 5) &  # At least 5 days in
+        (spend >= 1000)  # Has spent meaningful amount
+    )
+
+    # Severe underpacing flag
+    # Triggers when: Spending significantly slower than expected for cycle position
+    df['severe_underpacing'] = (
+        (spend_prog < 0.5) &  # Less than 50% of expected pacing
+        (days >= 5) &  # Enough time to establish pattern
+        (cycle_progress >= 0.15) &  # At least 15% through cycle
+        (spend >= 500)  # Has actually spent something (not paused)
     )
 
     # NOTE: Removed old vectorized odds calculation - now using unified _row_bundle approach
@@ -542,6 +632,27 @@ def calculate_churn_probability(df: pd.DataFrame) -> pd.DataFrame:
         labels=['LOW','MEDIUM','HIGH','CRITICAL'],
         right=True
     ).astype(str).fillna('LOW')
+
+    # ===== DEBUG: Check final churn calculation for Sano Heating =====
+    debug_mask = (df['campaign_id'] == '5022443')
+    if debug_mask.any():
+        dr = df[debug_mask].iloc[0]
+        b = bundle[debug_mask].iloc[0]
+        print(f"\n{'='*60}")
+        print(f"DEBUG: Final Churn Calculation for CID 5022443")
+        print(f"{'='*60}")
+        print(f"Baseline churn: {b['base_p']*100:.1f}%")
+        print(f"Unclamped churn: {b['p_unclamped']*100:.1f}%")
+        print(f"Final churn (clamped): {b['p_clamped']*100:.1f}%")
+        print(f"Is SAFE: {b['is_safe']}")
+        print(f"\nDrivers collected:")
+        for i, d in enumerate(b['drivers'], 1):
+            print(f"  [{i}] {d['name']}: {d['points']:+.1f}pp (HR: {d.get('lift_x', 'N/A')})")
+        print(f"\nZero-lead flags:")
+        print(f"  zero_lead_emerging: {dr.get('zero_lead_emerging', 'NOT SET')}")
+        print(f"  zero_lead_last_mo: {dr.get('zero_lead_last_mo', 'NOT SET')}")
+        print(f"  zero_lead_idle: {dr.get('zero_lead_idle', 'NOT SET')}")
+        print(f"{'='*60}\n")
 
     # Build risk_drivers_json from the same bundle
     df['risk_drivers_json'] = bundle.map(lambda b: {

@@ -80,29 +80,9 @@ async def get_campaign_trajectory(
 
         logger.info(f"Campaign {campaign_id}: Direct query found {len(historical_data)} records")
 
-        # MAID-based query: Get full historical data for the same advertiser (MAID)
-        if len(historical_data) < 3 and maid:  # If we need more data and have MAID
-            maid_query = text("""
-                SELECT report_month, cpl as cost_per_lead, leads_generated as leads, amount_spent as spend
-                FROM heartbeat_performance.spend_revenue_performance
-                WHERE maid = :maid_str
-                  AND cpl IS NOT NULL
-                ORDER BY report_month DESC
-                LIMIT 24
-            """)
-
-            logger.info(f"Campaign {campaign_id}: Trying MAID-based query with MAID {maid}")
-
-            # Use MAID as string (TEXT column in heartbeat_performance)
-            maid_result = await db.execute(maid_query, {"maid_str": str(maid)})
-            maid_data = maid_result.fetchall()
-
-            logger.info(f"Campaign {campaign_id}: MAID query found {len(maid_data)} records")
-
-            # Replace or extend historical_data with MAID results
-            if len(maid_data) > len(historical_data):
-                historical_data = maid_data
-                logger.info(f"Campaign {campaign_id}: Using MAID data ({len(maid_data)} records)")
+        # REMOVED: MAID-based fallback no longer used
+        # Different campaigns for the same advertiser have different economics
+        # If insufficient campaign-specific data, show "new_campaign" status instead
 
         # Fallback: Try business name + campaign name fuzzy match
         if not historical_data and partner_name and campaign_name:
@@ -184,17 +164,9 @@ async def get_campaign_trajectory(
             if row.cost_per_lead is not None
         ]
 
-        # Calculate trajectory metrics, but track if we used campaign-specific vs MAID fallback data
-        # Count how many records are actually from this specific campaign
-        campaign_specific_count = 0
-        if campaign_id_int is not None:
-            for row in historical_data:
-                if hasattr(row, 'campaign_id') and row.campaign_id == campaign_id_int:
-                    campaign_specific_count += 1
-
-        # Consider it campaign-specific only if most of the data is from this campaign
-        total_records = len(historical_data)
-        is_campaign_specific = campaign_specific_count >= max(3, total_records * 0.8)
+        # All historical data is now campaign-specific (no MAID fallback)
+        # Either we have direct campaign data, or we show "new_campaign" status
+        is_campaign_specific = len(historical_data) > 0
 
         trajectory_data = _calculate_trajectory_metrics(
             historical_points, current_cpl, goal_cpl, campaign_age_days, io_cycle, is_campaign_specific
